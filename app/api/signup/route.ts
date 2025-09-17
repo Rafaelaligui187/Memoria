@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import clientPromise from "@/lib/mongodb"
-import bcrypt from "bcryptjs"
 
 export async function POST(req: Request) {
   try {
@@ -8,53 +7,61 @@ export async function POST(req: Request) {
     const { schoolId, firstName, lastName, email, password, role } = body
 
     if (!schoolId || !firstName || !lastName || !email || !password || !role) {
-      return NextResponse.json({ success: false, message: "All fields are required" }, { status: 400 })
+      return NextResponse.json(
+        { success: false, message: "All fields are required" },
+        { status: 400 }
+      )
     }
+
+    // ✅ Normalize email
+    const normalizedEmail = email.toLowerCase()
 
     // Connect to MongoDB
     const client = await clientPromise
     const db = client.db("Memoria")
 
-    // Role-based collection
+    // ✅ Role-based collection
     let collectionName = ""
     if (role === "student") collectionName = "Student"
     else if (role === "teacher") collectionName = "Teacher"
     else if (role === "alumni") collectionName = "Alumni"
-    else return NextResponse.json({ success: false, message: "Invalid role" }, { status: 400 })
+    else
+      return NextResponse.json(
+        { success: false, message: "Invalid role" },
+        { status: 400 }
+      )
 
     const collection = db.collection(collectionName)
 
     // ✅ Check if School ID already exists across all collections
-    const student = await db.collection("Student").findOne({ schoolId })
-    const teacher = await db.collection("Teacher").findOne({ schoolId })
-    const alumni = await db.collection("Alumni").findOne({ schoolId })
+    const schoolIdExists =
+      (await db.collection("Student").findOne({ schoolId })) ||
+      (await db.collection("Teacher").findOne({ schoolId })) ||
+      (await db.collection("Alumni").findOne({ schoolId }))
 
-    if (student || teacher || alumni) {
+    if (schoolIdExists) {
       return NextResponse.json(
         { success: false, message: "School ID already exists" },
         { status: 400 }
       )
     }
 
-    // ✅ Check if email already exists in current role collection
-    const existingEmail = await collection.findOne({ email })
-    if (existingEmail) {
+    // ✅ Check if email already exists (only in current role collection)
+    const emailExists = await collection.findOne({ email: normalizedEmail })
+    if (emailExists) {
       return NextResponse.json(
         { success: false, message: "Email already exists" },
         { status: 400 }
       )
     }
 
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10)
-
-    // Insert new user
+    // ✅ Insert new user (plain password, NOT hashed)
     const newUser = {
       schoolId,
       firstName,
       lastName,
-      email,
-      password,
+      email: normalizedEmail,
+      password, // ⚠️ plain text
       role,
       createdAt: new Date(),
     }

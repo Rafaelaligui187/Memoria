@@ -12,3 +12,19 @@ export async function signup(data: any) {
     return { success: false, message: "Request failed" }
   }
 }
+
+export async function login(email: string, password: string) {
+  try {
+    const res = await fetch("/api/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "login", email, password }),
+    })
+
+    return await res.json()
+  } catch (err) {
+    console.error("Login request failed:", err)
+    return { success: false, message: "Request failed" }
+  }
+}
+

@@ -1,91 +1,67 @@
 import { NextResponse } from "next/server"
+import mongoose from "mongoose"
+import Student from "@/models/Student"
+import Teacher from "@/models/Teacher"
+import Alumni from "@/models/Alumni"
 
-// This is a simple mock authentication API
-// In a real application, you would use a proper authentication system
-// like NextAuth.js, Auth0, or a custom solution with a database
+const MONGODB_URI = process.env.MONGODB_URI as string
 
-// Mock user database
-const users = [
-  {
-    id: "1",
-    schoolId: "2023-00001",
-    firstName: "John",
-    lastName: "Doe",
-    email: "john.doe@example.com",
-    password: "password123", // In a real app, this would be hashed
-    userType: "student",
-  },
-  {
-    id: "2",
-    schoolId: "ADMIN-001",
-    firstName: "Admin",
-    lastName: "User",
-    email: "admin@example.com",
-    password: "admin123", // In a real app, this would be hashed
-    userType: "admin",
-  },
-]
+async function connectDB() {
+  if (mongoose.connection.readyState === 0) {
+    await mongoose.connect(MONGODB_URI)
+  }
+}
 
-// Update the login handling in the POST function to properly authenticate users
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    const body = await request.json()
-    const { action, identifier, password, schoolId, firstName, lastName, email, userType } = body
+    const { action, email, password } = await req.json()
+    await connectDB()
 
-    // Login
     if (action === "login") {
-      // For demo purposes, accept any credentials
-      // In a real app, you would validate against a database
-      const isEmail = identifier && identifier.includes("@")
+      // 🔍 Check all collections
+      let user =
+        (await Student.findOne({ email: email.toLowerCase() })) ||
+        (await Teacher.findOne({ email: email.toLowerCase() })) ||
+        (await Alumni.findOne({ email: email.toLowerCase() }))
 
-      const mockUser = {
-        id: "1",
-        schoolId: isEmail ? "2023-00001" : identifier,
-        firstName: "John",
-        lastName: "Doe",
-        email: isEmail ? identifier : "student@example.com",
-        userType: "student",
+      if (!user) {
+        return NextResponse.json(
+          { success: false, message: "User not found" },
+          { status: 401 }
+        )
       }
 
-      return NextResponse.json({
-        success: true,
-        message: "Login successful",
-        user: mockUser,
-      })
-    }
-
-    // Signup
-    if (action === "signup") {
-      // For demo purposes, always succeed
-      // In a real app, you would check if user exists and save to database
-      const newUser = {
-        id: Math.floor(Math.random() * 1000).toString(),
-        schoolId,
-        firstName,
-        lastName,
-        email,
-        userType,
+      // plain password check (since you’re not hashing for now)
+      if (user.password !== password) {
+        return NextResponse.json(
+          { success: false, message: "Invalid password" },
+          { status: 401 }
+        )
       }
 
+      // ✅ Return user data with role
       return NextResponse.json({
         success: true,
-        message: "Account created successfully",
-        user: newUser,
+        user: {
+          id: user._id,
+          schoolId: user.schoolId,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role || "unknown", // fallback in case role isn't stored
+        },
       })
     }
 
-    // Forgot password
-    if (action === "forgot-password") {
-      // For demo purposes, always succeed
-      return NextResponse.json({
-        success: true,
-        message: "If your email or school ID is registered, you will receive a password reset link",
-      })
-    }
-
-    return NextResponse.json({ success: false, message: "Invalid action" }, { status: 400 })
+    return NextResponse.json(
+      { success: false, message: "Invalid action" },
+      { status: 400 }
+    )
   } catch (error) {
-    console.error("Authentication error:", error)
-    return NextResponse.json({ success: false, message: "Internal server error" }, { status: 500 })
+    console.error("Login API error:", error)
+    return NextResponse.json(
+      { success: false, message: "Server error" },
+      { status: 500 }
+    )
   }
 }
