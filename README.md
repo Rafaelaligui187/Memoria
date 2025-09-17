@@ -1,5 +1,4 @@
 Memoria Capstone Group8
 
-To Install 
-npm install
+Type in terminal ---> npm install 
 
