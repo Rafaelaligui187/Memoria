@@ -1,2 +1,5 @@
-Wokring Signup connected to MongoDB
+Memoria Capstone Group8
+
+To Install 
+npm install
 
