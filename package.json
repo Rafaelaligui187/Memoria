@@ -11,7 +11,8 @@
     "db:check": "node scripts/restore-memoria-database.js check",
     "db:create": "node scripts/restore-memoria-database.js create",
     "db:sample": "node scripts/restore-memoria-database.js sample",
-    "db:backup": "node scripts/backup-database.js"
+    "db:backup": "node scripts/backup-database.js",
+    "gallery:init": "node scripts/create-gallery-collections.js"
   },
   "dependencies": {
     "@emotion/is-prop-valid": "latest",

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Camera, Calendar, Filter, Grid3X3, Grid, Search, Star, Eye, Heart, MapPin, Sparkles } from "lucide-react"
+import { Camera, Calendar, Filter, Grid3X3, Grid, Search, Star, Eye, Heart, MapPin, Sparkles, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
 
 import { Header } from "@/components/header"
@@ -12,121 +12,51 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
-
-const GALLERY_EVENTS = [
-  {
-    id: 1,
-    title: "Foundation Day Celebration",
-    date: "August 15, 2023",
-    imageCount: 24,
-    coverImage: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRLAjR0cJP0QRzToK_y8UPpyxV8sqvmMQXgNg&s",
-    category: "Events",
-    featured: true,
-    likes: 156,
-    views: 2340,
-    photographer: "Juan Dela Cruz",
-    location: "Main Campus",
-    description:
-      "Annual celebration commemorating the founding of our beloved institution with performances, activities, and community spirit.",
-  },
-  {
-    id: 2,
-    title: "Christmas Party",
-    date: "September 22, 2023",
-    imageCount: 36,
-    coverImage: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTOwfseZSorZuP-QVpxdiYGXEh05Bal2wd_ng&s",
-    category: "Events",
-    featured: false,
-    likes: 89,
-    views: 1567,
-    photographer: "Maria Santos",
-    location: "College Auditorium",
-    description: "Festive holiday celebration bringing together students, faculty, and staff in joyous commemoration.",
-  },
-  {
-    id: 3,
-    title: "College Department Recognition Day",
-    date: "April 23, 2025",
-    imageCount: 18,
-    coverImage: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTdSmul9w2EFy9k0jflk_6CyWk1QMMsSW2G-g&s",
-    category: "Academic",
-    featured: false,
-    likes: 67,
-    views: 1234,
-    photographer: "Robert Cruz",
-    location: "Academic Hall",
-    description:
-      "Honoring academic excellence and celebrating the achievements of our outstanding students and faculty.",
-  },
-  {
-    id: 4,
-    title: "Laudato Si': Care for Creation",
-    date: "December 18, 2023",
-    imageCount: 42,
-    coverImage: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRqSSPbjzSsRyjjibeDC0K23wyKjFQ2MeBbyg&s",
-    category: "Events",
-    featured: true,
-    likes: 203,
-    views: 3456,
-    photographer: "Ana Rodriguez",
-    location: "Campus Grounds",
-    description: "Environmental awareness program promoting ecological responsibility and sustainable practices.",
-  },
-  {
-    id: 5,
-    title: "Annual Faculty and Staff Recollection 2025",
-    date: "July 19, 2025",
-    imageCount: 56,
-    coverImage: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRU0PZCzjbApo83U9ybxCXMG6DVqo2ybCJ9qQ&s",
-    category: "Faculty",
-    featured: true,
-    likes: 134,
-    views: 2890,
-    photographer: "Father Miguel",
-    location: "Retreat Center",
-    description:
-      "Spiritual renewal and professional development gathering for our dedicated faculty and staff members.",
-  },
-  {
-    id: 6,
-    title: "Wandering Minds",
-    date: "March 15, 2024",
-    imageCount: 32,
-    coverImage: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTm2HBJ-gR4O-0CO-w6-i-SjYLT6Lchh1Rctw&s",
-    category: "Academic",
-    featured: false,
-    likes: 78,
-    views: 1678,
-    photographer: "Dr. Elena Vasquez",
-    location: "Science Building",
-    description:
-      "Intellectual exploration and creative thinking showcase featuring innovative student projects and research.",
-  },
-]
-
-const categories = ["All", ...new Set(GALLERY_EVENTS.map((event) => event.category))]
+import { getPublicAlbums, type AlbumData } from "@/lib/gallery-service"
 
 export default function GalleryPage() {
   const [authenticated, setAuthenticated] = useState(false)
   const [activeCategory, setActiveCategory] = useState("All")
   const [viewMode, setViewMode] = useState<"grid" | "masonry">("masonry")
   const [searchQuery, setSearchQuery] = useState("")
+  const [albums, setAlbums] = useState<AlbumData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     clearUnintendedAuth()
     setAuthenticated(isAuthenticated())
+    loadAlbums()
   }, [])
 
-  const filteredEvents = GALLERY_EVENTS.filter((event) => {
-    const matchesCategory = activeCategory === "All" || event.category === activeCategory
+  const loadAlbums = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+      const albumsData = await getPublicAlbums()
+      setAlbums(albumsData)
+    } catch (err) {
+      console.error('Error loading albums:', err)
+      setError('Failed to load gallery albums')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Get unique categories from albums
+  const categories = ["All", ...new Set(albums.map((album) => album.category))]
+
+  const filteredAlbums = albums.filter((album) => {
+    const matchesCategory = activeCategory === "All" || album.category === activeCategory
     const matchesSearch =
-      event.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      event.location.toLowerCase().includes(searchQuery.toLowerCase())
+      album.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      album.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      album.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      album.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
     return matchesCategory && matchesSearch
   })
 
-  const featuredEvents = GALLERY_EVENTS.filter((event) => event.featured).slice(0, 3)
+  const featuredAlbums = albums.filter((album) => album.isFeatured).slice(0, 3)
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
@@ -176,7 +106,7 @@ export default function GalleryPage() {
 
       <main className="flex-1 py-20">
         <div className="container px-4">
-          {activeCategory === "All" && (
+          {activeCategory === "All" && featuredAlbums.length > 0 && (
             <section className="mb-20">
               <div className="text-center mb-16">
                 <motion.div
@@ -202,8 +132,8 @@ export default function GalleryPage() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {featuredEvents.map((event, index) => (
-                  <Link key={event.id} href={`/gallery/${event.id}`}>
+                {featuredAlbums.map((album, index) => (
+                  <Link key={album.id} href={`/gallery/${album.id}`}>
                     <motion.div
                       initial={{ opacity: 0, y: 30 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -212,8 +142,8 @@ export default function GalleryPage() {
                     >
                       <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10" />
                       <Image
-                        src={event.coverImage || "/placeholder.svg"}
-                        alt={event.title}
+                        src={album.coverImage || "/placeholder.svg"}
+                        alt={album.title}
                         fill
                         className="object-cover transition-transform duration-700 group-hover:scale-110"
                       />
@@ -227,29 +157,25 @@ export default function GalleryPage() {
                           </Badge>
                           <div className="flex gap-2">
                             <div className="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-white text-xs flex items-center">
-                              <Eye className="h-3 w-3 mr-1" />
-                              {event.views.toLocaleString()}
-                            </div>
-                            <div className="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-white text-xs flex items-center">
-                              <Heart className="h-3 w-3 mr-1" />
-                              {event.likes}
+                              <Camera className="h-3 w-3 mr-1" />
+                              {album.mediaCount}
                             </div>
                           </div>
                         </div>
 
                         <div>
                           <h3 className="text-2xl font-bold text-white mb-3 group-hover:text-blue-200 transition-colors">
-                            {event.title}
+                            {album.title}
                           </h3>
-                          <p className="text-blue-100 text-sm mb-4 line-clamp-2">{event.description}</p>
+                          <p className="text-blue-100 text-sm mb-4 line-clamp-2">{album.description}</p>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center text-blue-100 text-sm">
                               <Calendar className="h-4 w-4 mr-2" />
-                              {event.date}
+                              {album.date ? new Date(album.date).toLocaleDateString() : 'No date'}
                             </div>
                             <div className="flex items-center text-blue-100 text-sm">
                               <Camera className="h-4 w-4 mr-2" />
-                              {event.imageCount} photos
+                              {album.mediaCount} photos
                             </div>
                           </div>
                         </div>
@@ -267,61 +193,93 @@ export default function GalleryPage() {
                 {activeCategory === "All" ? "All Collections" : `${activeCategory} Collections`}
               </h2>
               <p className="text-gray-600 text-lg">
-                {filteredEvents.length} {filteredEvents.length === 1 ? "collection" : "collections"} found
-                {searchQuery && ` for "${searchQuery}"`}
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading albums...
+                  </span>
+                ) : error ? (
+                  <span className="text-red-600">{error}</span>
+                ) : (
+                  `${filteredAlbums.length} ${filteredAlbums.length === 1 ? "collection" : "collections"} found${searchQuery && ` for "${searchQuery}"`}`
+                )}
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-6">
-              {/* Enhanced category filters */}
-              <div className="flex flex-wrap gap-3">
-                {categories.map((category) => (
-                  <Button
-                    key={category}
-                    variant={activeCategory === category ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setActiveCategory(category)}
-                    className={cn(
-                      "transition-all duration-300 px-6 py-2 rounded-full font-medium",
-                      activeCategory === category
-                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg"
-                        : "border-2 border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300",
-                    )}
-                  >
-                    {category}
-                  </Button>
-                ))}
-              </div>
+            {!loading && !error && (
+              <div className="flex flex-wrap items-center gap-6">
+                {/* Enhanced category filters */}
+                <div className="flex flex-wrap gap-3">
+                  {categories.map((category) => (
+                    <Button
+                      key={category}
+                      variant={activeCategory === category ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setActiveCategory(category)}
+                      className={cn(
+                        "transition-all duration-300 px-6 py-2 rounded-full font-medium",
+                        activeCategory === category
+                          ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg"
+                          : "border-2 border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300",
+                      )}
+                    >
+                      {category}
+                    </Button>
+                  ))}
+                </div>
 
-              {/* Enhanced view mode toggle */}
-              <div className="flex items-center border-2 border-blue-200 rounded-full overflow-hidden bg-white">
-                <button
-                  className={cn(
-                    "p-3 transition-all duration-200",
-                    viewMode === "grid"
-                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
-                      : "bg-white text-blue-600 hover:bg-blue-50",
-                  )}
-                  onClick={() => setViewMode("grid")}
-                >
-                  <Grid className="h-4 w-4" />
-                </button>
-                <button
-                  className={cn(
-                    "p-3 transition-all duration-200",
-                    viewMode === "masonry"
-                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
-                      : "bg-white text-blue-600 hover:bg-blue-50",
-                  )}
-                  onClick={() => setViewMode("masonry")}
-                >
-                  <Grid3X3 className="h-4 w-4" />
-                </button>
+                {/* Enhanced view mode toggle */}
+                <div className="flex items-center border-2 border-blue-200 rounded-full overflow-hidden bg-white">
+                  <button
+                    className={cn(
+                      "p-3 transition-all duration-200",
+                      viewMode === "grid"
+                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
+                        : "bg-white text-blue-600 hover:bg-blue-50",
+                    )}
+                    onClick={() => setViewMode("grid")}
+                  >
+                    <Grid className="h-4 w-4" />
+                  </button>
+                  <button
+                    className={cn(
+                      "p-3 transition-all duration-200",
+                      viewMode === "masonry"
+                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
+                        : "bg-white text-blue-600 hover:bg-blue-50",
+                    )}
+                    onClick={() => setViewMode("masonry")}
+                  >
+                    <Grid3X3 className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
-          {filteredEvents.length > 0 ? (
+          {loading ? (
+            <div className="text-center py-20">
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-full w-32 h-32 flex items-center justify-center mx-auto mb-8">
+                <Loader2 className="h-12 w-12 text-blue-400 animate-spin" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-4">Loading Gallery</h3>
+              <p className="text-gray-600">Please wait while we fetch the latest albums...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-20">
+              <div className="bg-gradient-to-br from-red-50 to-pink-50 rounded-full w-32 h-32 flex items-center justify-center mx-auto mb-8">
+                <Filter className="h-12 w-12 text-red-400" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-4">Unable to Load Gallery</h3>
+              <p className="text-gray-600 mb-8 max-w-md mx-auto">{error}</p>
+              <Button
+                onClick={loadAlbums}
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 px-8"
+              >
+                Try Again
+              </Button>
+            </div>
+          ) : filteredAlbums.length > 0 ? (
             <div
               className={cn(
                 "gap-8",
@@ -330,20 +288,20 @@ export default function GalleryPage() {
                   : "columns-1 sm:columns-2 lg:columns-3 xl:columns-4 space-y-8",
               )}
             >
-              {filteredEvents.map((event, index) => (
+              {filteredAlbums.map((album, index) => (
                 <motion.div
-                  key={event.id}
+                  key={album.id}
                   initial={{ opacity: 0, y: 30 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: index * 0.08 }}
                   className={cn(viewMode === "masonry" && "mb-8 break-inside-avoid")}
                 >
-                  <Link href={`/gallery/${event.id}`}>
+                  <Link href={`/gallery/${album.id}`}>
                     <div className="group bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition-all duration-500 border border-gray-100 transform hover:-translate-y-1">
                       <div className="relative aspect-[4/3] overflow-hidden">
                         <Image
-                          src={event.coverImage || "/placeholder.svg"}
-                          alt={event.title}
+                          src={album.coverImage || "/placeholder.svg"}
+                          alt={album.title}
                           fill
                           className="object-cover transition-transform duration-700 group-hover:scale-110"
                         />
@@ -353,52 +311,56 @@ export default function GalleryPage() {
                         <div className="absolute top-4 left-4 right-4 flex justify-between items-start">
                           <Badge className="bg-white/95 text-blue-600 backdrop-blur-sm border border-blue-100 font-medium">
                             <Camera className="h-3 w-3 mr-1" />
-                            {event.imageCount}
+                            {album.mediaCount}
                           </Badge>
-                          {event.featured && (
+                          {album.isFeatured && (
                             <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black font-semibold">
                               <Star className="h-3 w-3 mr-1" />
                               Featured
                             </Badge>
                           )}
                         </div>
-
-                        {/* Hover overlay with stats */}
-                        <div className="absolute bottom-4 left-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                          <div className="flex gap-3">
-                            <div className="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-white text-xs flex items-center">
-                              <Eye className="h-3 w-3 mr-1" />
-                              {event.views.toLocaleString()}
-                            </div>
-                            <div className="bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-white text-xs flex items-center">
-                              <Heart className="h-3 w-3 mr-1" />
-                              {event.likes}
-                            </div>
-                          </div>
-                        </div>
                       </div>
 
                       <div className="p-6">
                         <div className="flex items-center gap-2 mb-4">
                           <Badge className="bg-blue-50 text-blue-700 border-blue-200 font-medium">
-                            {event.category}
+                            {album.category}
                           </Badge>
-                          <div className="flex items-center text-xs text-gray-500">
-                            <MapPin className="h-3 w-3 mr-1" />
-                            {event.location}
-                          </div>
+                          {album.location && (
+                            <div className="flex items-center text-xs text-gray-500">
+                              <MapPin className="h-3 w-3 mr-1" />
+                              {album.location}
+                            </div>
+                          )}
                         </div>
 
                         <h3 className="font-bold text-xl text-gray-900 group-hover:text-blue-600 transition-colors mb-3 line-clamp-2">
-                          {event.title}
+                          {album.title}
                         </h3>
 
-                        <p className="text-gray-600 text-sm mb-4 line-clamp-2">{event.description}</p>
+                        <p className="text-gray-600 text-sm mb-4 line-clamp-2">{album.description}</p>
+
+                        {/* Tags */}
+                        {album.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-4">
+                            {album.tags.slice(0, 3).map((tag, tagIndex) => (
+                              <Badge key={tagIndex} variant="secondary" className="text-xs">
+                                #{tag}
+                              </Badge>
+                            ))}
+                            {album.tags.length > 3 && (
+                              <Badge variant="secondary" className="text-xs">
+                                +{album.tags.length - 3} more
+                              </Badge>
+                            )}
+                          </div>
+                        )}
 
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-gray-500 flex items-center">
                             <Calendar className="h-3.5 w-3.5 mr-1" />
-                            {event.date}
+                            {album.date ? new Date(album.date).toLocaleDateString() : 'No date'}
                           </span>
                           <span className="text-sm text-blue-600 font-semibold group-hover:text-blue-700">
                             View Gallery →
@@ -415,10 +377,12 @@ export default function GalleryPage() {
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-full w-32 h-32 flex items-center justify-center mx-auto mb-8">
                 <Filter className="h-12 w-12 text-blue-400" />
               </div>
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">No matching galleries found</h3>
+              <h3 className="text-2xl font-bold text-gray-900 mb-4">No albums found</h3>
               <p className="text-gray-600 mb-8 max-w-md mx-auto">
-                We couldn't find any galleries matching your search criteria. Try adjusting your filters or search
-                terms.
+                {searchQuery || activeCategory !== "All" 
+                  ? "We couldn't find any albums matching your search criteria. Try adjusting your filters or search terms."
+                  : "No albums have been created yet. Check back later for new collections!"
+                }
               </p>
               <div className="flex gap-4 justify-center">
                 <Button

@@ -1,20 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -29,94 +19,17 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { ImageIcon, Upload, MoreHorizontal, Edit, Trash2, FolderPlus, Grid, List, Search } from "lucide-react"
+import { ImageIcon, MoreHorizontal, Edit, Trash2, FolderPlus, Grid, List, Search, Star, Calendar, MapPin, User, Clock } from "lucide-react"
+import { CreateAlbumForm } from "@/components/create-album-form"
+import { 
+  getAlbums, 
+  getMediaItems, 
+  deleteAlbum, 
+  updateMediaStatus,
+  type AlbumData,
+  type MediaItem 
+} from "@/lib/gallery-service"
 
-interface MediaItem {
-  id: string
-  name: string
-  type: "image" | "video"
-  url: string
-  thumbnail: string
-  albumId: string
-  uploadedBy: string
-  uploadedAt: string
-  size: number
-  status: "approved" | "pending" | "rejected"
-  yearId: string
-}
-
-interface Album {
-  id: string
-  name: string
-  description: string
-  coverImage?: string
-  itemCount: number
-  createdAt: string
-  yearId: string
-  isPublic: boolean
-}
-
-const mockAlbums: Album[] = [
-  {
-    id: "1",
-    name: "Sports Day 2024",
-    description: "Annual sports day activities and competitions",
-    coverImage: "/placeholder.svg?height=200&width=300&text=Sports",
-    itemCount: 45,
-    createdAt: "2024-08-15",
-    yearId: "", // Will be populated from active school year
-    isPublic: true,
-  },
-  {
-    id: "2",
-    name: "Graduation Ceremony",
-    description: "Class of 2024 graduation ceremony",
-    coverImage: "/placeholder.svg?height=200&width=300&text=Graduation",
-    itemCount: 78,
-    createdAt: "2024-08-10",
-    yearId: "", // Will be populated from active school year
-    isPublic: true,
-  },
-  {
-    id: "3",
-    name: "Science Fair",
-    description: "Student science projects and presentations",
-    coverImage: "/placeholder.svg?height=200&width=300&text=Science",
-    itemCount: 32,
-    createdAt: "2024-08-05",
-    yearId: "", // Will be populated from active school year
-    isPublic: false,
-  },
-]
-
-const mockMediaItems: MediaItem[] = [
-  {
-    id: "1",
-    name: "sports_day_001.jpg",
-    type: "image",
-    url: "/placeholder.svg?height=400&width=600&text=Sports1",
-    thumbnail: "/placeholder.svg?height=150&width=150&text=Sports1",
-    albumId: "1",
-    uploadedBy: "Admin User",
-    uploadedAt: "2024-08-15T10:30:00Z",
-    size: 2048000,
-    status: "approved",
-    yearId: "", // Will be populated from active school year
-  },
-  {
-    id: "2",
-    name: "graduation_speech.mp4",
-    type: "video",
-    url: "/placeholder.svg?height=400&width=600&text=Video",
-    thumbnail: "/placeholder.svg?height=150&width=150&text=Video",
-    albumId: "2",
-    uploadedBy: "Faculty User",
-    uploadedAt: "2024-08-14T14:20:00Z",
-    size: 15728640,
-    status: "pending",
-    yearId: "", // Will be populated from active school year
-  },
-]
 
 interface MediaManagementProps {
   selectedYear: string
@@ -124,77 +37,108 @@ interface MediaManagementProps {
 }
 
 export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManagementProps) {
-  const [albums, setAlbums] = useState<Album[]>(mockAlbums.filter((album) => album.yearId === selectedYear))
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>(
-    mockMediaItems.filter((item) => item.yearId === selectedYear),
-  )
-  const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null)
+  const [albums, setAlbums] = useState<AlbumData[]>([])
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
+  const [selectedAlbum, setSelectedAlbum] = useState<AlbumData | null>(null)
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [loading, setLoading] = useState(true)
 
   const [createAlbumOpen, setCreateAlbumOpen] = useState(false)
-  const [uploadMediaOpen, setUploadMediaOpen] = useState(false)
   const [deleteAlbumOpen, setDeleteAlbumOpen] = useState(false)
-  const [albumToDelete, setAlbumToDelete] = useState<Album | null>(null)
-
-  const [newAlbum, setNewAlbum] = useState({
-    name: "",
-    description: "",
-    isPublic: true,
-  })
+  const [albumToDelete, setAlbumToDelete] = useState<AlbumData | null>(null)
 
   const { toast } = useToast()
 
+  // Load data on component mount and when selectedYear changes
+  useEffect(() => {
+    loadData()
+  }, [selectedYear])
+
+  const loadData = async () => {
+    setLoading(true)
+    try {
+      const [albumsData, mediaData] = await Promise.all([
+        getAlbums(),
+        getMediaItems()
+      ])
+      
+      // Filter by selected year
+      const filteredAlbums = albumsData.filter(album => album.yearId === selectedYear)
+      const filteredMedia = mediaData.filter(media => media.yearId === selectedYear)
+      
+      setAlbums(filteredAlbums)
+      setMediaItems(filteredMedia)
+    } catch (error) {
+      console.error("Error loading data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load gallery data.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleAlbumCreated = (newAlbum: AlbumData) => {
+    setAlbums(prev => [...prev, newAlbum])
+    loadData() // Refresh to get updated media count
+  }
+
   const filteredMediaItems = mediaItems.filter((item) => {
-    const matchesSearch = searchQuery === "" || item.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesSearch = searchQuery === "" || item.filename.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesStatus = statusFilter === "all" || item.status === statusFilter
     const matchesAlbum = !selectedAlbum || item.albumId === selectedAlbum.id
     return matchesSearch && matchesStatus && matchesAlbum
   })
 
-  const handleCreateAlbum = () => {
-    if (!newAlbum.name) {
-      toast({
-        title: "Error",
-        description: "Please enter an album name.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const album: Album = {
-      id: Date.now().toString(),
-      name: newAlbum.name,
-      description: newAlbum.description,
-      itemCount: 0,
-      createdAt: new Date().toISOString().split("T")[0],
-      yearId: selectedYear,
-      isPublic: newAlbum.isPublic,
-    }
-
-    setAlbums([...albums, album])
-    setCreateAlbumOpen(false)
-    setNewAlbum({ name: "", description: "", isPublic: true })
-
-    toast({
-      title: "Success",
-      description: "Album created successfully.",
-    })
-  }
-
-  const handleDeleteAlbum = () => {
+  const handleDeleteAlbum = async () => {
     if (!albumToDelete) return
 
-    setAlbums(albums.filter((album) => album.id !== albumToDelete.id))
-    setMediaItems(mediaItems.filter((item) => item.albumId !== albumToDelete.id))
-    setDeleteAlbumOpen(false)
-    setAlbumToDelete(null)
+    try {
+      await deleteAlbum(albumToDelete.id)
+      setAlbums(albums.filter((album) => album.id !== albumToDelete.id))
+      setMediaItems(mediaItems.filter((item) => item.albumId !== albumToDelete.id))
+      setDeleteAlbumOpen(false)
+      setAlbumToDelete(null)
 
-    toast({
-      title: "Success",
-      description: "Album and all its media have been deleted.",
-    })
+      toast({
+        title: "Success",
+        description: "Album and all its media have been deleted.",
+      })
+    } catch (error) {
+      console.error("Error deleting album:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete album.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleMediaStatusChange = async (mediaId: string, status: 'approved' | 'pending' | 'rejected') => {
+    try {
+      await updateMediaStatus(mediaId, status)
+      setMediaItems(prev => 
+        prev.map(item => 
+          item.id === mediaId ? { ...item, status } : item
+        )
+      )
+      
+      toast({
+        title: "Success",
+        description: `Media ${status} successfully.`,
+      })
+    } catch (error) {
+      console.error("Error updating media status:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update media status.",
+        variant: "destructive",
+      })
+    }
   }
 
   const formatFileSize = (bytes: number) => {
@@ -231,17 +175,13 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Media Management</h2>
-          <p className="text-muted-foreground">Manage albums, photos, and videos for {selectedYearLabel || selectedYear}</p>
+          <h2 className="text-2xl font-bold tracking-tight">Gallery Management</h2>
+          <p className="text-muted-foreground">Create albums and manage media for {selectedYearLabel || selectedYear}</p>
         </div>
         <div className="flex gap-2">
           <Button onClick={() => setCreateAlbumOpen(true)}>
             <FolderPlus className="h-4 w-4 mr-2" />
             Create Album
-          </Button>
-          <Button onClick={() => setUploadMediaOpen(true)}>
-            <Upload className="h-4 w-4 mr-2" />
-            Upload Media
           </Button>
         </div>
       </div>
@@ -299,63 +239,139 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
         </TabsList>
 
         <TabsContent value="albums" className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {albums.map((album) => (
-              <Card key={album.id} className="cursor-pointer hover:shadow-md transition-shadow">
-                <CardContent className="p-4">
-                  <div className="aspect-video bg-muted rounded-lg mb-4 flex items-center justify-center">
-                    {album.coverImage ? (
-                      <img
-                        src={album.coverImage || "/placeholder.svg"}
-                        alt={album.name}
-                        className="w-full h-full object-cover rounded-lg"
-                      />
-                    ) : (
-                      <ImageIcon className="h-12 w-12 text-muted-foreground" />
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold">{album.name}</h3>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setSelectedAlbum(album)}>
-                            <ImageIcon className="mr-2 h-4 w-4" />
-                            View Media
-                          </DropdownMenuItem>
-                          <DropdownMenuItem>
-                            <Edit className="mr-2 h-4 w-4" />
-                            Edit Album
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => {
-                              setAlbumToDelete(album)
-                              setDeleteAlbumOpen(true)
-                            }}
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete Album
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="text-muted-foreground mt-2">Loading albums...</p>
+            </div>
+          ) : albums.length === 0 ? (
+            <div className="text-center py-12">
+              <ImageIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No albums yet</h3>
+              <p className="text-muted-foreground mb-4">Create your first album to start organizing your media</p>
+              <Button onClick={() => setCreateAlbumOpen(true)}>
+                <FolderPlus className="h-4 w-4 mr-2" />
+                Create Album
+              </Button>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {albums.map((album) => (
+                <Card key={album.id} className="cursor-pointer hover:shadow-md transition-shadow">
+                  <CardContent className="p-4">
+                    <div className="aspect-video bg-muted rounded-lg mb-4 flex items-center justify-center">
+                      {album.coverImage ? (
+                        <img
+                          src={album.coverImage || "/placeholder.svg"}
+                          alt={album.title}
+                          className="w-full h-full object-cover rounded-lg"
+                        />
+                      ) : (
+                        <ImageIcon className="h-12 w-12 text-muted-foreground" />
+                      )}
                     </div>
-                    <p className="text-sm text-muted-foreground">{album.description}</p>
-                    <div className="flex items-center justify-between text-sm">
-                      <span>{album.itemCount} items</span>
-                      <Badge variant={album.isPublic ? "default" : "secondary"}>
-                        {album.isPublic ? "Public" : "Private"}
-                      </Badge>
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold line-clamp-1">{album.title}</h3>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setSelectedAlbum(album)}>
+                              <ImageIcon className="mr-2 h-4 w-4" />
+                              View Media
+                            </DropdownMenuItem>
+                            <DropdownMenuItem>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit Album
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setAlbumToDelete(album)
+                                setDeleteAlbumOpen(true)
+                              }}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete Album
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      
+                      {/* Category and Featured badges */}
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-blue-600 border-blue-200">
+                          {album.category}
+                        </Badge>
+                        {album.isFeatured && (
+                          <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-black">
+                            <Star className="h-3 w-3 mr-1" />
+                            Featured
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      <p className="text-sm text-muted-foreground line-clamp-2">{album.description}</p>
+                      
+                      {/* Album details */}
+                      <div className="space-y-2 text-xs text-muted-foreground">
+                        {album.date && (
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(album.date).toLocaleDateString()}
+                          </div>
+                        )}
+                        {album.location && (
+                          <div className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3" />
+                            {album.location}
+                          </div>
+                        )}
+                        {album.photographer && (
+                          <div className="flex items-center gap-1">
+                            <User className="h-3 w-3" />
+                            {album.photographer}
+                          </div>
+                        )}
+                        {album.duration && (
+                          <div className="flex items-center gap-1">
+                            <Clock className="h-3 w-3" />
+                            {album.duration}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Tags */}
+                      {album.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {album.tags.slice(0, 3).map((tag, index) => (
+                            <Badge key={index} variant="secondary" className="text-xs">
+                              #{tag}
+                            </Badge>
+                          ))}
+                          {album.tags.length > 3 && (
+                            <Badge variant="secondary" className="text-xs">
+                              +{album.tags.length - 3} more
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                      
+                      <div className="flex items-center justify-between text-sm">
+                        <span>{album.mediaCount} items</span>
+                        <Badge variant={album.isPublic ? "default" : "secondary"}>
+                          {album.isPublic ? "Public" : "Private"}
+                        </Badge>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="media" className="space-y-4">
@@ -412,18 +428,18 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
                 <Card key={item.id} className="overflow-hidden">
                   <div className="aspect-square bg-muted flex items-center justify-center">
                     <img
-                      src={item.thumbnail || "/placeholder.svg"}
-                      alt={item.name}
+                      src={item.thumbnailUrl || "/placeholder.svg"}
+                      alt={item.filename}
                       className="w-full h-full object-cover"
                     />
                   </div>
                   <CardContent className="p-3">
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium truncate">{item.name}</p>
+                        <p className="text-sm font-medium truncate">{item.filename}</p>
                         {getStatusBadge(item.status)}
                       </div>
-                      <p className="text-xs text-muted-foreground">{formatFileSize(item.size)}</p>
+                      <p className="text-xs text-muted-foreground">{formatFileSize(item.fileSize)}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -450,17 +466,19 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-3">
                               <img
-                                src={item.thumbnail || "/placeholder.svg"}
-                                alt={item.name}
+                                src={item.thumbnailUrl || "/placeholder.svg"}
+                                alt={item.filename}
                                 className="w-10 h-10 object-cover rounded"
                               />
-                              <span className="font-medium">{item.name}</span>
+                              <span className="font-medium">{item.filename}</span>
                             </div>
                           </td>
                           <td className="px-4 py-3">
-                            <Badge variant="outline">{item.type}</Badge>
+                            <Badge variant="outline">
+                              {item.mimeType.startsWith('image/') ? 'Image' : 'Video'}
+                            </Badge>
                           </td>
-                          <td className="px-4 py-3 text-sm">{formatFileSize(item.size)}</td>
+                          <td className="px-4 py-3 text-sm">{formatFileSize(item.fileSize)}</td>
                           <td className="px-4 py-3">{getStatusBadge(item.status)}</td>
                           <td className="px-4 py-3 text-sm text-muted-foreground">
                             {new Date(item.uploadedAt).toLocaleDateString()}
@@ -501,14 +519,14 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
                   <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
                     <div className="flex items-center gap-4">
                       <img
-                        src={item.thumbnail || "/placeholder.svg"}
-                        alt={item.name}
+                        src={item.thumbnailUrl || "/placeholder.svg"}
+                        alt={item.filename}
                         className="w-16 h-16 object-cover rounded"
                       />
                       <div>
-                        <h4 className="font-medium">{item.name}</h4>
+                        <h4 className="font-medium">{item.filename}</h4>
                         <p className="text-sm text-muted-foreground">
-                          Uploaded by {item.uploadedBy} • {formatFileSize(item.size)}
+                          Uploaded by {item.uploadedBy} • {formatFileSize(item.fileSize)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {new Date(item.uploadedAt).toLocaleDateString()}
@@ -516,10 +534,19 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Button size="sm" variant="outline" className="text-red-600 border-red-600 bg-transparent">
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="text-red-600 border-red-600 bg-transparent"
+                        onClick={() => handleMediaStatusChange(item.id, 'rejected')}
+                      >
                         Reject
                       </Button>
-                      <Button size="sm" className="bg-green-600 hover:bg-green-700">
+                      <Button 
+                        size="sm" 
+                        className="bg-green-600 hover:bg-green-700"
+                        onClick={() => handleMediaStatusChange(item.id, 'approved')}
+                      >
                         Approve
                       </Button>
                     </div>
@@ -536,75 +563,13 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
         </TabsContent>
       </Tabs>
 
-      {/* Create Album Dialog */}
-      <Dialog open={createAlbumOpen} onOpenChange={setCreateAlbumOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create New Album</DialogTitle>
-            <DialogDescription>Create a new album to organize your media</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="albumName">Album Name</Label>
-              <Input
-                id="albumName"
-                value={newAlbum.name}
-                onChange={(e) => setNewAlbum({ ...newAlbum, name: e.target.value })}
-                placeholder="Enter album name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="albumDescription">Description</Label>
-              <Textarea
-                id="albumDescription"
-                value={newAlbum.description}
-                onChange={(e) => setNewAlbum({ ...newAlbum, description: e.target.value })}
-                placeholder="Enter album description"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="isPublic"
-                checked={newAlbum.isPublic}
-                onChange={(e) => setNewAlbum({ ...newAlbum, isPublic: e.target.checked })}
-              />
-              <Label htmlFor="isPublic">Make album public</Label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateAlbumOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleCreateAlbum}>Create Album</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Upload Media Dialog */}
-      <Dialog open={uploadMediaOpen} onOpenChange={setUploadMediaOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Upload Media</DialogTitle>
-            <DialogDescription>Upload photos and videos to your albums</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center">
-              <Upload className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">Drag and drop files here, or click to browse</p>
-              <Button variant="outline" className="mt-4 bg-transparent">
-                Choose Files
-              </Button>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setUploadMediaOpen(false)}>
-              Cancel
-            </Button>
-            <Button>Upload</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Create Album Form */}
+      <CreateAlbumForm
+        open={createAlbumOpen}
+        onOpenChange={setCreateAlbumOpen}
+        selectedYear={selectedYear}
+        onAlbumCreated={handleAlbumCreated}
+      />
 
       {/* Delete Album Dialog */}
       <AlertDialog open={deleteAlbumOpen} onOpenChange={setDeleteAlbumOpen}>
@@ -612,7 +577,7 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Album</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{albumToDelete?.name}"? This will also delete all media in this album.
+              Are you sure you want to delete "{albumToDelete?.title}"? This will also delete all media in this album.
               This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
