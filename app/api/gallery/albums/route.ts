@@ -7,6 +7,7 @@ import {
   deleteAlbum,
   connectToDatabase 
 } from "@/lib/gallery-database"
+import { createAuditLog, getClientInfo } from "@/lib/audit-log-utils"
 
 // GET /api/gallery/albums - Get all albums
 export async function GET(request: NextRequest) {
@@ -73,6 +74,35 @@ export async function POST(request: NextRequest) {
     })
     
     console.log('[Album API] Album created successfully:', album)
+    
+    // Create audit log for album creation
+    try {
+      const clientInfo = getClientInfo(request)
+      await createAuditLog({
+        userId: "admin",
+        userName: "Admin",
+        action: "album_created",
+        targetType: "album",
+        targetId: album.id,
+        targetName: album.title,
+        details: {
+          category: album.category,
+          yearId: album.yearId,
+          isPublic: album.isPublic,
+          isFeatured: album.isFeatured,
+          description: album.description,
+          tags: album.tags,
+          location: album.location,
+          photographer: album.photographer
+        },
+        schoolYearId: album.yearId,
+        userAgent: clientInfo.userAgent,
+        status: "success"
+      })
+    } catch (auditError) {
+      console.error('[Album API] Failed to create audit log:', auditError)
+      // Don't fail the album creation if audit logging fails
+    }
     
     return NextResponse.json({
       success: true,

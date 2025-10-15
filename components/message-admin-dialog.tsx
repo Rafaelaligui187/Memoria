@@ -12,6 +12,8 @@ import { Upload, Send, AlertCircle, Paperclip, X } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/auth-context"
+import { UserMessageHistory } from "./user-message-history"
 
 interface MessageAdminDialogProps {
   open: boolean
@@ -19,12 +21,14 @@ interface MessageAdminDialogProps {
 }
 
 export function MessageAdminDialog({ open, onOpenChange }: MessageAdminDialogProps) {
+  const { user } = useAuth()
   const [subject, setSubject] = useState("")
   const [category, setCategory] = useState("")
   const [message, setMessage] = useState("")
   const [attachments, setAttachments] = useState<File[]>([])
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!subject.trim() || !message.trim() || !category) {
       toast({
         title: "Missing required fields",
@@ -34,20 +38,76 @@ export function MessageAdminDialog({ open, onOpenChange }: MessageAdminDialogPro
       return
     }
 
-    console.log("[v0] Sending message to admin:", { subject, category, message, attachments })
+    if (!user) {
+      toast({
+        title: "Authentication Error",
+        description: "Please log in to send a message.",
+        variant: "destructive",
+      })
+      return
+    }
 
-    toast({
-      title: "Message sent successfully!",
-      description: "Your message has been sent to the administrators. You'll receive a response within 24-48 hours.",
-    })
+    setLoading(true)
+    try {
+      // Get current school year ID (you might need to adjust this based on your app's structure)
+      const schoolYearId = "current" // This should be dynamically determined
+      
+      const response = await fetch('/api/reports', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user.id || user.email,
+          userName: user.name || 'Anonymous User',
+          userEmail: user.email,
+          category: category,
+          subject: subject,
+          description: message,
+          priority: 'medium',
+          schoolYearId: schoolYearId,
+          attachments: [], // For now, we'll handle file uploads separately if needed
+        }),
+      })
 
-    onOpenChange(false)
+      const data = await response.json()
+      
+      if (data.success) {
+        toast({
+          title: "Message sent successfully!",
+          description: "Your message has been sent to the administrators. You'll receive a response within 24-48 hours.",
+        })
 
-    // Reset form
-    setSubject("")
-    setCategory("")
-    setMessage("")
-    setAttachments([])
+        onOpenChange(false)
+
+        // Reset form
+        setSubject("")
+        setCategory("")
+        setMessage("")
+        setAttachments([])
+        
+        // Refresh the message history
+        window.dispatchEvent(new CustomEvent('refreshUserMessages'))
+        
+        // Dispatch event to update notifications
+        window.dispatchEvent(new CustomEvent('userReportSubmitted'))
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Failed to send message. Please try again.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error sending message:', error)
+      toast({
+        title: "Error",
+        description: "Failed to send message. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
   const removeAttachment = (index: number) => {
@@ -74,15 +134,24 @@ export function MessageAdminDialog({ open, onOpenChange }: MessageAdminDialogPro
         </DialogHeader>
 
         <div className="space-y-6">
-          <Alert className="border-accent/30 bg-accent/5">
-            <AlertCircle className="h-4 w-4 text-accent" />
-            <AlertDescription className="text-sm">
-              Your message will be sent securely to the yearbook administrators. All communications are confidential and
-              will be handled with care. Expect a response within 24-48 hours.
-            </AlertDescription>
-          </Alert>
-
+          {/* Message History */}
           <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Your Recent Messages</h3>
+            <UserMessageHistory />
+          </div>
+
+          <div className="border-t pt-6">
+            <h3 className="text-lg font-semibold mb-4">Send New Message</h3>
+            
+            <Alert className="border-accent/30 bg-accent/5">
+              <AlertCircle className="h-4 w-4 text-accent" />
+              <AlertDescription className="text-sm">
+                Your message will be sent securely to the yearbook administrators. All communications are confidential and
+                will be handled with care. Expect a response within 24-48 hours.
+              </AlertDescription>
+            </Alert>
+
+            <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="category">Category *</Label>
               <Select value={category} onValueChange={setCategory}>
@@ -171,6 +240,7 @@ export function MessageAdminDialog({ open, onOpenChange }: MessageAdminDialogPro
                 </CardContent>
               </Card>
             </div>
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t">
@@ -179,11 +249,11 @@ export function MessageAdminDialog({ open, onOpenChange }: MessageAdminDialogPro
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={!subject || !message || !category}
+              disabled={!subject || !message || !category || loading}
               className="px-6 bg-primary hover:bg-primary/90"
             >
               <Send className="mr-2 h-4 w-4" />
-              Send Message
+              {loading ? "Sending..." : "Send Message"}
             </Button>
           </div>
         </div>

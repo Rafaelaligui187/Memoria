@@ -5,6 +5,7 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
 import { AuthProvider } from "@/contexts/auth-context"
+import { AlbumLikeProvider } from "@/contexts/album-likes-context"
 import { ConditionalFooter } from "@/components/conditional-footer"
 
 const inter = Inter({ subsets: ["latin"] })
@@ -25,9 +26,11 @@ export default function RootLayout({
       <body className={inter.className}>
         <ThemeProvider attribute="class" defaultTheme="light">
           <AuthProvider>
-            {children}
-            <Toaster />
-            <ConditionalFooter />
+            <AlbumLikeProvider>
+              {children}
+              <Toaster />
+              <ConditionalFooter />
+            </AlbumLikeProvider>
           </AuthProvider>
         </ThemeProvider>
       </body>

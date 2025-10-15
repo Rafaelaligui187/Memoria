@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
       const reportsCollection = db.collection('reports')
       totalOpenReports = await reportsCollection.countDocuments({
         schoolYearId: schoolYearId,
-        status: { $in: ['open', 'pending', 'in_progress'] }
+        status: { $in: ['new', 'in_progress'] }
       })
     } catch (error) {
       console.log('Reports collection not found or accessible, defaulting to 0')

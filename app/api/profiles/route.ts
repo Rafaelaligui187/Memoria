@@ -2,7 +2,6 @@ import { NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/mongodb/connection"
 import { ObjectId } from "mongodb"
 import { DEPARTMENT_TO_COLLECTION, YEARBOOK_COLLECTIONS } from "@/lib/yearbook-schemas"
-import { notificationService } from "@/lib/notification-service"
 
 // Function to determine the correct collection based on user type and department
 function getCollectionName(userType: string, department?: string): string {
@@ -225,6 +224,37 @@ export async function POST(request: Request) {
           }, { status: 500 })
         }
 
+        // Create notification for profile resubmission
+        try {
+          const notificationsCollection = db.collection('notifications')
+          
+          const notificationData = {
+            id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            type: "approval",
+            title: "Profile Resubmitted",
+            message: `${profileData.fullName || "Unknown User"} has resubmitted their profile for review for ${schoolYearId}`,
+            priority: "high",
+            category: "profile",
+            actionUrl: `/admin/profiles?profileId=${existingProfile._id.toString()}&schoolYearId=${schoolYearId}`,
+            actionLabel: "Review Profile",
+            metadata: { 
+              profileId: existingProfile._id.toString(), 
+              userName: profileData.fullName || "Unknown User", 
+              schoolYearId: schoolYearId,
+              userType: userType,
+              isResubmission: true
+            },
+            timestamp: new Date(),
+            read: false,
+          }
+          
+          await notificationsCollection.insertOne(notificationData)
+          
+        } catch (notificationError) {
+          console.error('Error creating profile resubmission notification:', notificationError)
+          // Don't fail the profile update if notification fails
+        }
+
         return NextResponse.json({
           success: true,
           message: "Profile updated successfully and submitted for admin approval",
@@ -252,13 +282,31 @@ export async function POST(request: Request) {
 
     // Create notification for new profile submission
     try {
-      await notificationService.notifyNewProfileSubmission(
-        profileData.fullName || "Unknown User",
-        result.insertedId.toString(),
-        profileData.schoolYearId || ""
-      )
+      const notificationsCollection = db.collection('notifications')
+      
+      const notificationData = {
+        id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type: "approval",
+        title: "New Profile Submission",
+        message: `${profileData.fullName || "Unknown User"} has submitted a new profile for review for ${schoolYearId}`,
+        priority: "high",
+        category: "profile",
+        actionUrl: `/admin/profiles?profileId=${result.insertedId.toString()}&schoolYearId=${schoolYearId}`,
+        actionLabel: "Review Profile",
+        metadata: { 
+          profileId: result.insertedId.toString(), 
+          userName: profileData.fullName || "Unknown User", 
+          schoolYearId: schoolYearId,
+          userType: userType
+        },
+        timestamp: new Date(),
+        read: false,
+      }
+      
+      await notificationsCollection.insertOne(notificationData)
+      
     } catch (notificationError) {
-      console.error('Error creating notification:', notificationError)
+      console.error('Error creating profile notification:', notificationError)
       // Don't fail the profile creation if notification fails
     }
 

@@ -114,7 +114,7 @@ export function logout(): void {
 export function isAuthenticated(): boolean {
   if (typeof window === "undefined") return false
   const token = localStorage.getItem("auth_token")
-  return token === "test_token"
+  return token === "authenticated"
 }
 
 export function getCurrentUser(): any | null {
@@ -125,10 +125,20 @@ export function getCurrentUser(): any | null {
 
 export function clearUnintendedAuth(): void {
   if (typeof window === "undefined") return
-  const intentionalLogin = localStorage.getItem("intentional_login")
-  if (!intentionalLogin) {
+  
+  // Check if user has valid auth data
+  const token = localStorage.getItem("auth_token")
+  const user = localStorage.getItem("memoria_user")
+  
+  // Only clear auth data if there's no valid authentication
+  // This prevents clearing auth data on page refresh for authenticated users
+  if (!token || !user) {
     clearAuthData()
-  } else {
+  }
+  
+  // Remove the intentional_login flag after first check to prevent repeated clearing
+  const intentionalLogin = localStorage.getItem("intentional_login")
+  if (intentionalLogin) {
     localStorage.removeItem("intentional_login")
   }
 }

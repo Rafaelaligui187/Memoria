@@ -56,6 +56,35 @@ export async function POST(request: NextRequest) {
     
     await addMediaToAlbum(body.albumId, body.mediaItems)
     
+    // Create audit log for media upload
+    try {
+      const clientInfo = getClientInfo(request)
+      await createAuditLog({
+        userId: "admin",
+        userName: "Admin",
+        action: "media_uploaded",
+        targetType: "media",
+        targetId: body.albumId,
+        targetName: `Media upload to album`,
+        details: {
+          albumId: body.albumId,
+          mediaCount: body.mediaItems.length,
+          mediaItems: body.mediaItems.map((item: any) => ({
+            id: item.id,
+            name: item.name,
+            url: item.url,
+            type: item.type
+          }))
+        },
+        schoolYearId: body.schoolYearId,
+        userAgent: clientInfo.userAgent,
+        status: "success"
+      })
+    } catch (auditError) {
+      console.error('[Media API] Failed to create audit log:', auditError)
+      // Don't fail the media upload if audit logging fails
+    }
+    
     return NextResponse.json({
       success: true,
       message: 'Media added to album successfully'

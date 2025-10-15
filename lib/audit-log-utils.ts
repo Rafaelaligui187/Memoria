@@ -31,7 +31,26 @@ export async function createAuditLog(auditData: AuditLogData) {
       'bulk_profile_approved',
       'bulk_profile_rejected',
       'bulk_user_deleted',
-      'manual_profile_created'
+      'manual_profile_created',
+      // Gallery & Albums actions
+      'album_created',
+      'album_updated',
+      'album_deleted',
+      'media_uploaded',
+      'media_deleted',
+      // School Years management actions
+      'school_year_created',
+      'school_year_updated',
+      'school_year_deleted',
+      'school_year_activated',
+      'school_year_deactivated',
+      // Reports & Messages actions
+      'report_created',
+      'report_updated',
+      'report_deleted',
+      'report_resolved',
+      'message_replied',
+      'message_deleted'
     ]
     
     // Only allow specific admin actions

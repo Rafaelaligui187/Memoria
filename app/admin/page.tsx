@@ -32,11 +32,24 @@ export default function AdminDashboardPage() {
   const searchParams = useSearchParams()
   const [selectedYear, setSelectedYear] = useState("")
   const [selectedYearLabel, setSelectedYearLabel] = useState("")
-  const [activeSection, setActiveSection] = useState("overall")
+  const [activeSection, setActiveSection] = useState(() => {
+    // Initialize from localStorage if available, otherwise default to "overall"
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('adminActiveSection') || "overall"
+    }
+    return "overall"
+  })
   const [isDashboardMode, setIsDashboardMode] = useState(true)
   
   // Use dynamic stats
   const { stats, loading: statsLoading, refreshStats } = useAdminStats(selectedYear)
+
+  // Save active section to localStorage whenever it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('adminActiveSection', activeSection)
+    }
+  }, [activeSection])
 
   // Listen for profile approval/rejection events to refresh stats
   useEffect(() => {
@@ -137,14 +150,16 @@ export default function AdminDashboardPage() {
     if (yearParam) {
       setSelectedYear(yearParam)
       setIsDashboardMode(false) // If year is selected, switch to overview mode
+    } else {
+      setIsDashboardMode(true) // If no year selected, use dashboard mode
     }
     
     if (sectionParam) {
       setActiveSection(sectionParam)
     } else if (!yearParam) {
-      // If no year is selected and no section specified, default to overall data
-      setActiveSection("overall")
-      setIsDashboardMode(true)
+      // If no section specified and no year selected, try localStorage, otherwise default to overall
+      const savedSection = typeof window !== 'undefined' ? localStorage.getItem('adminActiveSection') : null
+      setActiveSection(savedSection || "overall")
     }
   }, [searchParams])
 
@@ -153,7 +168,7 @@ export default function AdminDashboardPage() {
     const yearParam = searchParams.get("year")
     const sectionParam = searchParams.get("section")
     
-    // If no parameters exist, set default URL
+    // If no parameters exist, set default URL for dashboard mode
     if (!yearParam && !sectionParam) {
       const url = new URL(window.location.href)
       url.searchParams.set('section', 'overall')
@@ -177,7 +192,18 @@ export default function AdminDashboardPage() {
       </div>
 
       {isDashboardMode ? (
-        <Tabs value={activeSection} onValueChange={setActiveSection} className="space-y-4">
+        <Tabs value={activeSection} onValueChange={(value) => {
+          setActiveSection(value)
+          // Update URL parameters when tab changes
+          const url = new URL(window.location.href)
+          url.searchParams.set('section', value)
+          url.searchParams.delete('year') // Remove year param when in dashboard mode
+          window.history.replaceState({}, '', url.toString())
+          // Also save to localStorage
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('adminActiveSection', value)
+          }
+        }} className="space-y-4">
           <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8">
             <TabsTrigger value="overall" className="flex items-center gap-1 hover:bg-blue-100 hover:text-blue-800 active:bg-blue-300 active:text-blue-900 transition-all duration-200">
               <BarChart3 className="h-4 w-4" />
@@ -190,9 +216,11 @@ export default function AdminDashboardPage() {
             <TabsTrigger value="reports" className="flex items-center gap-1 hover:bg-blue-100 hover:text-blue-800 active:bg-blue-300 active:text-blue-900 transition-all duration-200">
               <MessageSquare className="h-4 w-4" />
               <span className="hidden sm:inline">Reports & Messages</span>
-              <Badge variant="secondary" className="ml-auto text-xs">
-                2
-              </Badge>
+              {stats?.totalOpenReports > 0 && (
+                <Badge variant="secondary" className="ml-auto text-xs">
+                  {stats.totalOpenReports}
+                </Badge>
+              )}
             </TabsTrigger>
             <TabsTrigger value="audit-logs" className="flex items-center gap-1 hover:bg-blue-100 hover:text-blue-800 active:bg-blue-300 active:text-blue-900 transition-all duration-200">
               <History className="h-4 w-4" />

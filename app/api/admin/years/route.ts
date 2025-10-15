@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { yearbookService } from "@/lib/yearbook-service"
+import { createAuditLog, getClientInfo } from "@/lib/audit-log-utils"
 
 interface SchoolYear {
   id: string
@@ -84,6 +85,32 @@ export async function POST(request: NextRequest) {
     // Also dispatch the event with yearbook format for profile management
     console.log('School year created successfully:', newYear)
 
+    // Create audit log for school year creation
+    try {
+      const clientInfo = getClientInfo(request)
+      await createAuditLog({
+        userId: "admin",
+        userName: "Admin",
+        action: "school_year_created",
+        targetType: "school_year",
+        targetId: newYear.id,
+        targetName: newYear.label,
+        details: {
+          yearLabel: newYear.label,
+          startDate: newYear.startDate,
+          endDate: newYear.endDate,
+          status: newYear.status,
+          isActive: newYear.status === 'active'
+        },
+        schoolYearId: newYear.id,
+        userAgent: clientInfo.userAgent,
+        status: "success"
+      })
+    } catch (auditError) {
+      console.error('[School Years API] Failed to create audit log for creation:', auditError)
+      // Don't fail the school year creation if audit logging fails
+    }
+
     return NextResponse.json({
       success: true,
       data: newYear,
@@ -129,6 +156,40 @@ export async function PUT(request: NextRequest) {
       updatedAt: result.data.updatedAt.toISOString(),
     }
 
+    // Create audit log for school year update
+    try {
+      const clientInfo = getClientInfo(request)
+      await createAuditLog({
+        userId: "admin",
+        userName: "Admin",
+        action: "school_year_updated",
+        targetType: "school_year",
+        targetId: updatedYear.id,
+        targetName: updatedYear.label,
+        details: {
+          originalData: {
+            yearLabel: body.yearLabel,
+            startDate: body.startDate,
+            endDate: body.endDate,
+            status: body.status
+          },
+          updatedData: {
+            yearLabel: updatedYear.label,
+            startDate: updatedYear.startDate,
+            endDate: updatedYear.endDate,
+            status: updatedYear.status
+          },
+          changes: Object.keys(body)
+        },
+        schoolYearId: updatedYear.id,
+        userAgent: clientInfo.userAgent,
+        status: "success"
+      })
+    } catch (auditError) {
+      console.error('[School Years API] Failed to create audit log for update:', auditError)
+      // Don't fail the school year update if audit logging fails
+    }
+
     return NextResponse.json({
       success: true,
       data: updatedYear,
@@ -171,6 +232,34 @@ export async function DELETE(request: NextRequest) {
 
     if (!result.success) {
       return NextResponse.json({ success: false, error: result.error }, { status: 500 })
+    }
+
+    // Create audit log for school year deletion
+    try {
+      const clientInfo = getClientInfo(request)
+      await createAuditLog({
+        userId: "admin",
+        userName: "Admin",
+        action: "school_year_deleted",
+        targetType: "school_year",
+        targetId: id,
+        targetName: yearToDelete.yearLabel,
+        details: {
+          deletedYearData: {
+            yearLabel: yearToDelete.yearLabel,
+            startDate: yearToDelete.startDate,
+            endDate: yearToDelete.endDate,
+            isActive: yearToDelete.isActive,
+            createdAt: yearToDelete.createdAt
+          }
+        },
+        schoolYearId: id,
+        userAgent: clientInfo.userAgent,
+        status: "success"
+      })
+    } catch (auditError) {
+      console.error('[School Years API] Failed to create audit log for deletion:', auditError)
+      // Don't fail the school year deletion if audit logging fails
     }
 
     return NextResponse.json({

@@ -26,8 +26,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
-import { Search, Plus, MoreHorizontal, Edit, Trash2, User, Download, CheckCircle, XCircle, Clock, Eye, FileText } from "lucide-react"
+import { UnifiedProfileSetupForm } from "@/components/unified-profile-setup-form"
+import { Search, Plus, MoreHorizontal, Edit, Trash2, User, Download, CheckCircle, XCircle, Clock, Eye, FileText, Heart, MapPin, Phone, Mail, Calendar, GraduationCap, Briefcase, Award, Users, Share2 } from "lucide-react"
 
 interface Account {
   id: string
@@ -49,6 +52,8 @@ interface Account {
   rejectionReason?: string
   reviewedAt?: string
   reviewedBy?: string
+  // User ownership
+  ownedBy?: string
   // Role-specific fields
   studentId?: string
   grade?: string
@@ -57,6 +62,36 @@ interface Account {
   position?: string
   graduationYear?: string
   employeeId?: string
+  // Profile data fields (from the profile object)
+  fullName?: string
+  nickname?: string
+  age?: number
+  gender?: string
+  birthday?: string
+  address?: string
+  phone?: string
+  profilePicture?: string
+  profilePictureUrl?: string
+  sayingMotto?: string
+  dreamJob?: string
+  messageToStudents?: string
+  achievements?: string[]
+  activities?: string[]
+  fatherGuardianName?: string
+  motherGuardianName?: string
+  yearLevel?: string
+  courseProgram?: string
+  major?: string
+  blockSection?: string
+  departmentAssigned?: string
+  officeAssigned?: string
+  yearsOfService?: number
+  currentProfession?: string
+  currentCompany?: string
+  currentLocation?: string
+  socialMediaFacebook?: string
+  socialMediaInstagram?: string
+  socialMediaTwitter?: string
 }
 
 const mockAccounts: Account[] = [
@@ -113,8 +148,10 @@ export function AccountManagement({ selectedYear, selectedYearLabel }: AccountMa
   const [selectedStatus, setSelectedStatus] = useState<string>("all")
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [viewDialogOpen, setViewDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null)
+  const [profileData, setProfileData] = useState<any>(null)
   const { toast } = useToast()
 
   const [newAccount, setNewAccount] = useState<Partial<Account>>({
@@ -161,6 +198,24 @@ export function AccountManagement({ selectedYear, selectedYearLabel }: AccountMa
       fetchAccounts()
     }
   }, [selectedYear])
+
+  // View profile data (already available in account object)
+  const viewProfileData = (account: Account) => {
+    // Check if the account has profile data
+    if (!account.fullName && !account.profileStatus) {
+      toast({
+        title: "No Profile Found",
+        description: "This user hasn't submitted a profile for this school year.",
+        variant: "destructive",
+      })
+      return
+    }
+    
+    // The account object already contains all the profile data we need
+    // since it's fetched from the admin profiles API
+    setProfileData(account)
+    setViewDialogOpen(true)
+  }
 
   // Filter accounts - show approved and pending accounts, hide rejected accounts
   const filteredAccounts = accounts.filter((account) => {
@@ -528,20 +583,14 @@ export function AccountManagement({ selectedYear, selectedYearLabel }: AccountMa
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem>
-                            <User className="mr-2 h-4 w-4" />
-                            View Profile
-                          </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => {
-                              toast({
-                                title: "Profile Actions",
-                                description: "Use the Profile Approval Management section for approvals.",
-                              })
+                              setSelectedAccount(account)
+                              viewProfileData(account)
                             }}
                           >
-                            <FileText className="mr-2 h-4 w-4" />
-                            Manage in Profile Approval
+                            <User className="mr-2 h-4 w-4" />
+                            View Profile
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => {
@@ -641,6 +690,270 @@ export function AccountManagement({ selectedYear, selectedYearLabel }: AccountMa
             </Button>
             <Button onClick={handleAddAccount}>Create Account</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Profile Dialog */}
+      <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+        <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>View Profile</DialogTitle>
+            <DialogDescription>View {selectedAccount?.name}'s profile information</DialogDescription>
+          </DialogHeader>
+          {profileData && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-4">
+                <Avatar className="h-16 w-16">
+                  <AvatarImage
+                    src={profileData.profilePicture || profileData.profilePictureUrl || "/placeholder.svg"}
+                  />
+                  <AvatarFallback className="text-lg">
+                    {profileData.fullName || selectedAccount?.name}
+                      ?.split(" ")
+                      .map((n: string) => n[0])
+                      .join("")}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <h3 className="text-lg font-semibold">
+                    {profileData.fullName || selectedAccount?.name}
+                  </h3>
+                  {profileData.nickname && (
+                    <p className="text-muted-foreground italic">"{profileData.nickname}"</p>
+                  )}
+                  <p className="text-muted-foreground">
+                    {selectedAccount?.role} • {selectedAccount?.department}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {profileData.email || selectedAccount?.email}
+                  </p>
+                </div>
+              </div>
+
+              <Tabs defaultValue="basic" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="basic">Basic Info</TabsTrigger>
+                  <TabsTrigger value="academic">Academic</TabsTrigger>
+                  <TabsTrigger value="personal">Personal</TabsTrigger>
+                  <TabsTrigger value="yearbook">Yearbook</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="basic" className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Heart className="h-5 w-5 text-pink-600" />
+                        Basic Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <span className="font-medium">Full Name:</span>
+                          <p>{profileData.fullName || "N/A"}</p>
+                        </div>
+                        {profileData.nickname && (
+                          <div>
+                            <span className="font-medium">Nickname:</span>
+                            <p>{profileData.nickname}</p>
+                          </div>
+                        )}
+                        {profileData.age && (
+                          <div>
+                            <span className="font-medium">Age:</span>
+                            <p>{profileData.age}</p>
+                          </div>
+                        )}
+                        {profileData.gender && (
+                          <div>
+                            <span className="font-medium">Gender:</span>
+                            <p>{profileData.gender}</p>
+                          </div>
+                        )}
+                        {profileData.birthday && (
+                          <div>
+                            <span className="font-medium">Birthday:</span>
+                            <p>{new Date(profileData.birthday).toLocaleDateString()}</p>
+                          </div>
+                        )}
+                        {profileData.phone && (
+                          <div>
+                            <span className="font-medium">Phone:</span>
+                            <p>{profileData.phone}</p>
+                          </div>
+                        )}
+                      </div>
+                      {profileData.address && (
+                        <div>
+                          <span className="font-medium">Address:</span>
+                          <p>{profileData.address}</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="academic" className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <GraduationCap className="h-5 w-5 text-blue-600" />
+                        Academic Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {profileData.department && (
+                          <div>
+                            <span className="font-medium">Department:</span>
+                            <p>{profileData.department}</p>
+                          </div>
+                        )}
+                        {profileData.yearLevel && (
+                          <div>
+                            <span className="font-medium">Year Level:</span>
+                            <p>{profileData.yearLevel}</p>
+                          </div>
+                        )}
+                        {profileData.courseProgram && (
+                          <div>
+                            <span className="font-medium">Course/Program:</span>
+                            <p>{profileData.courseProgram}</p>
+                          </div>
+                        )}
+                        {profileData.major && (
+                          <div>
+                            <span className="font-medium">Major:</span>
+                            <p>{profileData.major}</p>
+                          </div>
+                        )}
+                        {profileData.blockSection && (
+                          <div>
+                            <span className="font-medium">Block/Section:</span>
+                            <p>{profileData.blockSection}</p>
+                          </div>
+                        )}
+                        {profileData.graduationYear && (
+                          <div>
+                            <span className="font-medium">Graduation Year:</span>
+                            <p>{profileData.graduationYear}</p>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="personal" className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Users className="h-5 w-5 text-green-600" />
+                        Personal Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {profileData.fatherGuardianName && (
+                          <div>
+                            <span className="font-medium">Father/Guardian:</span>
+                            <p>{profileData.fatherGuardianName}</p>
+                          </div>
+                        )}
+                        {profileData.motherGuardianName && (
+                          <div>
+                            <span className="font-medium">Mother/Guardian:</span>
+                            <p>{profileData.motherGuardianName}</p>
+                          </div>
+                        )}
+                        {profileData.dreamJob && (
+                          <div>
+                            <span className="font-medium">Dream Job:</span>
+                            <p>{profileData.dreamJob}</p>
+                          </div>
+                        )}
+                        {profileData.position && (
+                          <div>
+                            <span className="font-medium">Position:</span>
+                            <p>{profileData.position}</p>
+                          </div>
+                        )}
+                        {profileData.yearsOfService && (
+                          <div>
+                            <span className="font-medium">Years of Service:</span>
+                            <p>{profileData.yearsOfService}</p>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="yearbook" className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Award className="h-5 w-5 text-purple-600" />
+                        Yearbook Information
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {profileData.sayingMotto && (
+                        <div>
+                          <span className="font-medium">Saying/Motto:</span>
+                          <p className="italic">"{profileData.sayingMotto}"</p>
+                        </div>
+                      )}
+                      {profileData.messageToStudents && (
+                        <div>
+                          <span className="font-medium">Message to Students:</span>
+                          <p>{profileData.messageToStudents}</p>
+                        </div>
+                      )}
+                      {profileData.achievements && profileData.achievements.length > 0 && (
+                        <div>
+                          <span className="font-medium">Achievements:</span>
+                          <ul className="list-disc list-inside mt-1">
+                            {profileData.achievements.map((achievement: string, index: number) => (
+                              <li key={index}>{achievement}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Account Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-[900px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Account</DialogTitle>
+            <DialogDescription>
+              Edit {selectedAccount?.name}'s profile information
+            </DialogDescription>
+          </DialogHeader>
+          {selectedAccount && (
+            <UnifiedProfileSetupForm
+              schoolYearId={selectedYear}
+              userId={selectedAccount.ownedBy || selectedAccount.id}
+              isEditing={true}
+              onBack={() => setEditDialogOpen(false)}
+              onSave={() => {
+                setEditDialogOpen(false)
+                fetchAccounts() // Refresh the accounts list
+                toast({
+                  title: "Success",
+                  description: "Profile updated successfully.",
+                })
+              }}
+            />
+          )}
         </DialogContent>
       </Dialog>
 

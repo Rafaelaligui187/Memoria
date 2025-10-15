@@ -64,9 +64,13 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
         getMediaItems()
       ])
       
-      // Filter by selected year
-      const filteredAlbums = albumsData.filter(album => album.yearId === selectedYear)
-      const filteredMedia = mediaData.filter(media => media.yearId === selectedYear)
+      // Filter by selected year AND global albums (for admin view)
+      const filteredAlbums = albumsData.filter(album => 
+        album.yearId === selectedYear || album.yearId === 'global'
+      )
+      const filteredMedia = mediaData.filter(media => 
+        media.yearId === selectedYear || media.yearId === 'global'
+      )
       
       setAlbums(filteredAlbums)
       setMediaItems(filteredMedia)
@@ -187,7 +191,7 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
       </div>
 
       {/* Stats */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Albums</CardTitle>
@@ -205,28 +209,6 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{mediaItems.length}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Approval</CardTitle>
-            <ImageIcon className="h-4 w-4 text-amber-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{mediaItems.filter((item) => item.status === "pending").length}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Storage Used</CardTitle>
-            <ImageIcon className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {formatFileSize(mediaItems.reduce((total, item) => total + item.size, 0))}
-            </div>
           </CardContent>
         </Card>
       </div>
@@ -248,11 +230,7 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
             <div className="text-center py-12">
               <ImageIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-semibold mb-2">No albums yet</h3>
-              <p className="text-muted-foreground mb-4">Create your first album to start organizing your media</p>
-              <Button onClick={() => setCreateAlbumOpen(true)}>
-                <FolderPlus className="h-4 w-4 mr-2" />
-                Create Album
-              </Button>
+              <p className="text-muted-foreground">Create your first album to start organizing your media</p>
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

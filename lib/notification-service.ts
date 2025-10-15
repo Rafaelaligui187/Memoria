@@ -11,25 +11,45 @@ class NotificationService {
     return NotificationService.instance
   }
 
-  // Create notification
+  // Create notification - works both client-side and server-side
   async createNotification(data: CreateNotificationData): Promise<void> {
     try {
-      const response = await fetch('/api/admin/notifications', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(data),
-      })
+      // Check if we're running on the server side (in API routes)
+      if (typeof window === 'undefined') {
+        // Server-side: directly interact with database
+        const { connectToDatabase } = await import('./mongodb/connection')
+        const db = await connectToDatabase()
+        const notificationsCollection = db.collection('notifications')
 
-      if (!response.ok) {
-        throw new Error('Failed to create notification')
+        const newNotification = {
+          id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          ...data,
+          timestamp: new Date(),
+          read: false,
+        }
+
+        await notificationsCollection.insertOne(newNotification)
+        console.log('✅ Notification created directly in database:', newNotification.id)
+      } else {
+        // Client-side: make HTTP request
+        const response = await fetch('/api/admin/notifications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(data),
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to create notification')
+        }
+
+        const result = await response.json()
+        console.log('✅ Notification created via API:', result.message)
       }
-
-      const result = await response.json()
-      console.log('Notification created:', result.message)
     } catch (error) {
-      console.error('Error creating notification:', error)
+      console.error('❌ Error creating notification:', error)
+      throw error
     }
   }
 
@@ -48,6 +68,12 @@ class NotificationService {
   // New profile submission notification
   async notifyNewProfileSubmission(userName: string, profileId: string, schoolYearId: string): Promise<void> {
     const notificationData = NOTIFICATION_TEMPLATES.NEW_PROFILE_SUBMISSION(userName, profileId, schoolYearId)
+    await this.createNotification(notificationData)
+  }
+
+  // User report/message notification
+  async notifyUserReport(userName: string, subject: string, reportId: string, priority: "low" | "medium" | "high" | "urgent" = "medium"): Promise<void> {
+    const notificationData = NOTIFICATION_TEMPLATES.USER_REPORT(userName, subject, reportId, priority)
     await this.createNotification(notificationData)
   }
 

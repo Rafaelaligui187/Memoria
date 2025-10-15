@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -18,14 +18,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
-import { MessageSquare, AlertTriangle, CheckCircle, Clock, Eye, Reply, Archive, Filter } from "lucide-react"
+import { MessageSquare, AlertTriangle, CheckCircle, Clock, Eye, Reply, Archive, Filter, RefreshCw } from "lucide-react"
 
 interface Report {
-  id: string
+  _id?: string
+  id?: string
   userId: string
   userName: string
   userEmail: string
-  category: "inappropriate_content" | "harassment" | "spam" | "technical_issue" | "other"
+  category: "technical" | "profile" | "content" | "privacy" | "suggestion" | "other"
   subject: string
   description: string
   status: "new" | "in_progress" | "resolved" | "archived"
@@ -34,62 +35,16 @@ interface Report {
   resolvedAt?: string
   assignedTo?: string
   adminReply?: string
-  yearId: string
+  schoolYearId: string
   attachments?: string[]
 }
 
-const mockReports: Report[] = [
-  {
-    id: "1",
-    userId: "user1",
-    userName: "John Doe",
-    userEmail: "john.doe@example.com",
-    category: "inappropriate_content",
-    subject: "Inappropriate photo in gallery",
-    description: "There's a photo in the Sports Day album that contains inappropriate content and should be removed.",
-    status: "new",
-    priority: "high",
-    submittedAt: "2024-08-15T10:30:00Z",
-    yearId: "", // Will be populated from active school year
-  },
-  {
-    id: "2",
-    userId: "user2",
-    userName: "Jane Smith",
-    userEmail: "jane.smith@example.com",
-    category: "technical_issue",
-    subject: "Cannot upload profile photo",
-    description: "I'm having trouble uploading my profile photo. The upload keeps failing with an error message.",
-    status: "in_progress",
-    priority: "medium",
-    submittedAt: "2024-08-14T14:20:00Z",
-    assignedTo: "Admin User",
-    yearId: "", // Will be populated from active school year
-  },
-  {
-    id: "3",
-    userId: "user3",
-    userName: "Mike Johnson",
-    userEmail: "mike.johnson@example.com",
-    category: "harassment",
-    subject: "Bullying in comments",
-    description: "Someone is posting mean comments on my profile and I would like this to be addressed.",
-    status: "resolved",
-    priority: "high",
-    submittedAt: "2024-08-13T09:15:00Z",
-    resolvedAt: "2024-08-14T11:30:00Z",
-    assignedTo: "Admin User",
-    adminReply:
-      "We have investigated the issue and taken appropriate action. The offending comments have been removed and the user has been warned.",
-    yearId: "", // Will be populated from active school year
-  },
-]
-
 const reportCategories = {
-  inappropriate_content: "Inappropriate Content",
-  harassment: "Harassment/Bullying",
-  spam: "Spam",
-  technical_issue: "Technical Issue",
+  technical: "Technical Issue",
+  profile: "Profile Help",
+  content: "Content Concern",
+  privacy: "Privacy Issue",
+  suggestion: "Suggestion",
   other: "Other",
 }
 
@@ -106,7 +61,7 @@ interface ReportsManagementProps {
 }
 
 export function ReportsManagement({ selectedYear, selectedYearLabel }: ReportsManagementProps) {
-  const [reports, setReports] = useState<Report[]>(mockReports.filter((report) => report.yearId === selectedYear))
+  const [reports, setReports] = useState<Report[]>([])
   const [selectedReport, setSelectedReport] = useState<Report | null>(null)
   const [viewDialogOpen, setViewDialogOpen] = useState(false)
   const [replyDialogOpen, setReplyDialogOpen] = useState(false)
@@ -114,7 +69,44 @@ export function ReportsManagement({ selectedYear, selectedYearLabel }: ReportsMa
   const [filterStatus, setFilterStatus] = useState<string>("all")
   const [filterPriority, setFilterPriority] = useState<string>("all")
   const [filterCategory, setFilterCategory] = useState<string>("all")
+  const [loading, setLoading] = useState(false)
   const { toast } = useToast()
+
+  // Fetch reports from API
+  const fetchReports = async () => {
+    // Use "current" as default if no specific year is selected
+    const yearId = selectedYear || "current"
+    
+    setLoading(true)
+    try {
+      const response = await fetch(`/api/reports?schoolYearId=${yearId}`)
+      const data = await response.json()
+      
+      if (data.success) {
+        setReports(data.data || [])
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to fetch reports",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error fetching reports:', error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch reports",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Load reports when component mounts or selectedYear changes
+  useEffect(() => {
+    fetchReports()
+  }, [selectedYear])
 
   const filteredReports = reports.filter((report) => {
     const matchesStatus = filterStatus === "all" || report.status === filterStatus
@@ -127,26 +119,62 @@ export function ReportsManagement({ selectedYear, selectedYearLabel }: ReportsMa
   const inProgressCount = reports.filter((r) => r.status === "in_progress").length
   const resolvedCount = reports.filter((r) => r.status === "resolved").length
 
-  const handleStatusChange = (reportId: string, newStatus: Report["status"]) => {
-    const updatedReports = reports.map((report) =>
-      report.id === reportId
-        ? {
-            ...report,
-            status: newStatus,
-            resolvedAt: newStatus === "resolved" ? new Date().toISOString() : report.resolvedAt,
-            assignedTo: newStatus === "in_progress" ? "Admin User" : report.assignedTo,
-          }
-        : report,
-    )
-    setReports(updatedReports)
+  const handleStatusChange = async (reportId: string, newStatus: Report["status"]) => {
+    try {
+      const response = await fetch(`/api/reports/${reportId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          assignedTo: newStatus === "in_progress" ? "Admin User" : undefined,
+        }),
+      })
 
-    toast({
-      title: "Status Updated",
-      description: `Report status changed to ${newStatus.replace("_", " ")}.`,
-    })
+      const data = await response.json()
+      
+      if (data.success) {
+        // Update local state
+        const updatedReports = reports.map((report) =>
+          (report._id || report.id) === reportId
+            ? {
+                ...report,
+                status: newStatus,
+                resolvedAt: newStatus === "resolved" ? new Date().toISOString() : report.resolvedAt,
+                assignedTo: newStatus === "in_progress" ? "Admin User" : report.assignedTo,
+              }
+            : report,
+        )
+        setReports(updatedReports)
+
+        toast({
+          title: "Status Updated",
+          description: `Report status changed to ${newStatus.replace("_", " ")}.`,
+        })
+        
+        // Trigger refresh for user message history if status changed to resolved
+        if (newStatus === "resolved") {
+          window.dispatchEvent(new CustomEvent('refreshUserMessages'))
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Failed to update report status",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error updating report status:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update report status",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handleReply = () => {
+  const handleReply = async () => {
     if (!selectedReport || !adminReply.trim()) {
       toast({
         title: "Error",
@@ -156,27 +184,63 @@ export function ReportsManagement({ selectedYear, selectedYearLabel }: ReportsMa
       return
     }
 
-    const updatedReports = reports.map((report) =>
-      report.id === selectedReport.id
-        ? {
-            ...report,
-            adminReply: adminReply,
-            status: "resolved" as const,
-            resolvedAt: new Date().toISOString(),
-            assignedTo: "Admin User",
-          }
-        : report,
-    )
+    try {
+      const reportId = selectedReport._id || selectedReport.id
+      const response = await fetch(`/api/reports/${reportId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'resolved',
+          adminReply: adminReply,
+          assignedTo: "Admin User",
+        }),
+      })
 
-    setReports(updatedReports)
-    setReplyDialogOpen(false)
-    setSelectedReport(null)
-    setAdminReply("")
+      const data = await response.json()
+      
+      if (data.success) {
+        // Update local state
+        const updatedReports = reports.map((report) =>
+          (report._id || report.id) === reportId
+            ? {
+                ...report,
+                adminReply: adminReply,
+                status: "resolved" as const,
+                resolvedAt: new Date().toISOString(),
+                assignedTo: "Admin User",
+              }
+            : report,
+        )
 
-    toast({
-      title: "Reply Sent",
-      description: "Your reply has been sent and the report has been marked as resolved.",
-    })
+        setReports(updatedReports)
+        setReplyDialogOpen(false)
+        setSelectedReport(null)
+        setAdminReply("")
+
+        toast({
+          title: "Reply Sent",
+          description: "Your reply has been sent and the report has been marked as resolved.",
+        })
+        
+        // Trigger refresh for user message history
+        window.dispatchEvent(new CustomEvent('refreshUserMessages'))
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Failed to send reply",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error sending reply:', error)
+      toast({
+        title: "Error",
+        description: "Failed to send reply",
+        variant: "destructive",
+      })
+    }
   }
 
   const getStatusBadge = (status: string) => {
@@ -238,8 +302,20 @@ export function ReportsManagement({ selectedYear, selectedYearLabel }: ReportsMa
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Reports & Messages</h2>
-          <p className="text-muted-foreground">Handle user reports and messages for {selectedYearLabel || selectedYear}</p>
+          <p className="text-muted-foreground">
+            Handle user reports and messages for {selectedYearLabel || selectedYear || "Current School Year"}
+          </p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={fetchReports}
+          disabled={loading}
+          className="flex items-center gap-2"
+        >
+          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -390,7 +466,7 @@ export function ReportsManagement({ selectedYear, selectedYearLabel }: ReportsMa
                         View
                       </Button>
                       {report.status === "new" && (
-                        <Button size="sm" onClick={() => handleStatusChange(report.id, "in_progress")}>
+                        <Button size="sm" onClick={() => handleStatusChange(report._id || report.id || '', "in_progress")}>
                           Take Action
                         </Button>
                       )}
@@ -588,7 +664,7 @@ export function ReportsManagement({ selectedYear, selectedYearLabel }: ReportsMa
                 {selectedReport?.status === "new" && (
                   <Button
                     onClick={() => {
-                      handleStatusChange(selectedReport.id, "in_progress")
+                      handleStatusChange(selectedReport._id || selectedReport.id || '', "in_progress")
                       setViewDialogOpen(false)
                     }}
                   >

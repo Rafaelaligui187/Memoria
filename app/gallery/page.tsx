@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { getPublicAlbums, type AlbumData } from "@/lib/gallery-service"
+import { getCurrentUserClient } from "@/lib/auth-client"
 
 export default function GalleryPage() {
   const [authenticated, setAuthenticated] = useState(false)
@@ -22,6 +23,7 @@ export default function GalleryPage() {
   const [albums, setAlbums] = useState<AlbumData[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [albumCounts, setAlbumCounts] = useState<Record<string, { likes: number; views: number }>>({})
 
   useEffect(() => {
     clearUnintendedAuth()
@@ -35,11 +37,48 @@ export default function GalleryPage() {
       setError(null)
       const albumsData = await getPublicAlbums()
       setAlbums(albumsData)
+      
+      // Load counts for all albums
+      await loadAlbumCounts(albumsData)
     } catch (err) {
       console.error('Error loading albums:', err)
       setError('Failed to load gallery albums')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const loadAlbumCounts = async (albumsData: AlbumData[]) => {
+    try {
+      const currentUser = getCurrentUserClient()
+      const albumIds = albumsData.map(album => album.id)
+      
+      if (albumIds.length === 0) return
+      
+      // Load like counts
+      const likesResponse = await fetch(`/api/gallery/likes?albumIds=${albumIds.join(',')}&userId=${currentUser?.id || ''}`)
+      const likesData = likesResponse.ok ? await likesResponse.json() : { success: false, data: [] }
+      
+      // Load view counts
+      const viewsResponse = await fetch(`/api/gallery/views?albumIds=${albumIds.join(',')}&userId=${currentUser?.id || ''}`)
+      const viewsData = viewsResponse.ok ? await viewsResponse.json() : { success: false, data: [] }
+      
+      // Combine the counts
+      const counts: Record<string, { likes: number; views: number }> = {}
+      
+      albumIds.forEach(albumId => {
+        const likeStats = likesData.success ? likesData.data.find((stat: any) => stat.albumId === albumId) : null
+        const viewStats = viewsData.success ? viewsData.data.find((stat: any) => stat.albumId === albumId) : null
+        
+        counts[albumId] = {
+          likes: likeStats?.totalLikes || 0,
+          views: viewStats?.totalViews || 0
+        }
+      })
+      
+      setAlbumCounts(counts)
+    } catch (error) {
+      console.error('Error loading album counts:', error)
     }
   }
 
@@ -362,9 +401,25 @@ export default function GalleryPage() {
                             <Calendar className="h-3.5 w-3.5 mr-1" />
                             {album.date ? new Date(album.date).toLocaleDateString() : 'No date'}
                           </span>
-                          <span className="text-sm text-blue-600 font-semibold group-hover:text-blue-700">
-                            View Gallery →
-                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-sm text-blue-600 font-semibold group-hover:text-blue-700">
+                              View Gallery →
+                            </span>
+                          </div>
+                        </div>
+                        
+                        {/* Engagement Stats */}
+                        <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">
+                          <div className="flex items-center gap-4 text-xs text-gray-500">
+                            <div className="flex items-center gap-1">
+                              <Heart className="h-3 w-3" />
+                              <span>{albumCounts[album.id]?.likes || 0}</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <Eye className="h-3 w-3" />
+                              <span>{albumCounts[album.id]?.views || 0}</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>

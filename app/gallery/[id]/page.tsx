@@ -31,9 +31,10 @@ import { useToast } from "@/hooks/use-toast"
 import { Header } from "@/components/header"
 import { cn } from "@/lib/utils"
 import { getAlbumById, getMediaByAlbumId, type AlbumData, type MediaItem } from "@/lib/gallery-service"
+import { AlbumLikeButton } from "@/components/album-like-button"
+import { getCurrentUserClient } from "@/lib/auth-client"
 
 export default function GalleryDetailPage({ params }: { params: { id: string } }) {
-  const [isLiked, setIsLiked] = useState(false)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -41,6 +42,8 @@ export default function GalleryDetailPage({ params }: { params: { id: string } }
   const [album, setAlbum] = useState<AlbumData | null>(null)
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [likeCount, setLikeCount] = useState(0)
+  const [viewCount, setViewCount] = useState(0)
   const { toast } = useToast()
 
   const albumId = params.id
@@ -74,11 +77,62 @@ export default function GalleryDetailPage({ params }: { params: { id: string } }
       const mediaData = await getMediaByAlbumId(albumId)
       setMediaItems(mediaData)
       
+      // Load like and view counts
+      await loadCounts()
+      
+      // Track view
+      await trackView()
+      
     } catch (err) {
       console.error('Error loading album:', err)
       setError('Failed to load album')
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const loadCounts = async () => {
+    try {
+      const currentUser = getCurrentUserClient()
+      
+      // Load like count
+      const likesResponse = await fetch(`/api/gallery/likes?albumId=${albumId}&userId=${currentUser?.id || ''}`)
+      if (likesResponse.ok) {
+        const likesResult = await likesResponse.json()
+        if (likesResult.success) {
+          setLikeCount(likesResult.data.totalLikes)
+        }
+      }
+      
+      // Load view count
+      const viewsResponse = await fetch(`/api/gallery/views?albumId=${albumId}&userId=${currentUser?.id || ''}`)
+      if (viewsResponse.ok) {
+        const viewsResult = await viewsResponse.json()
+        if (viewsResult.success) {
+          setViewCount(viewsResult.data.totalViews)
+        }
+      }
+    } catch (error) {
+      console.error('Error loading counts:', error)
+    }
+  }
+
+  const trackView = async () => {
+    try {
+      const currentUser = getCurrentUserClient()
+      
+      await fetch('/api/gallery/views', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          albumId, 
+          userId: currentUser?.id 
+        })
+      })
+    } catch (error) {
+      console.error('Error tracking view:', error)
     }
   }
 
@@ -115,13 +169,6 @@ export default function GalleryDetailPage({ params }: { params: { id: string } }
     )
   }
 
-  const handleLike = () => {
-    setIsLiked(!isLiked)
-    toast({
-      title: isLiked ? "Removed from favorites" : "Added to favorites",
-      description: isLiked ? "Photo removed from your favorites" : "Photo added to your favorites",
-    })
-  }
 
   const handleDownload = () => {
     toast({
@@ -286,6 +333,7 @@ export default function GalleryDetailPage({ params }: { params: { id: string } }
                 </button>
                 <button
                   className="bg-white/80 backdrop-blur-sm p-2 rounded-full shadow-lg hover:bg-white transition-all duration-200"
+                  onClick={toggleFullscreen}
                 >
                   <Grid3X3 className="h-4 w-4 text-gray-700" />
                 </button>
@@ -331,18 +379,13 @@ export default function GalleryDetailPage({ params }: { params: { id: string } }
           {/* Action Buttons - Outside and Centered */}
           <div className="flex justify-center mt-8 mb-12">
             <div className="flex gap-8">
-              <Button
-                variant="outline"
+              <AlbumLikeButton
+                albumId={albumId}
                 size="lg"
-                onClick={handleLike}
-                className={cn(
-                  "flex items-center gap-4 px-8 py-4 text-lg font-semibold border-blue-200 text-blue-600 hover:bg-blue-50",
-                  isLiked && "text-red-600 border-red-200 bg-red-50"
-                )}
-              >
-                <Heart className={cn("h-6 w-6", isLiked && "fill-current")} />
-                Like
-              </Button>
+                showCount={false}
+                className="px-8 py-4 text-lg font-semibold"
+                onLikeChange={(isLiked, count) => setLikeCount(count)}
+              />
               <Button 
                 variant="outline" 
                 size="lg" 
@@ -458,12 +501,12 @@ export default function GalleryDetailPage({ params }: { params: { id: string } }
               <div className="grid grid-cols-2 gap-6 mt-12">
                 <div className="bg-red-50 rounded-xl p-8 text-center">
                   <Heart className="h-8 w-8 text-red-500 mx-auto mb-4" />
-                  <div className="text-4xl font-bold text-gray-900">42</div>
+                  <div className="text-4xl font-bold text-gray-900">{likeCount}</div>
                   <div className="text-lg text-gray-600">Likes</div>
                 </div>
                 <div className="bg-blue-50 rounded-xl p-8 text-center">
                   <Eye className="h-8 w-8 text-blue-500 mx-auto mb-4" />
-                  <div className="text-4xl font-bold text-gray-900">156</div>
+                  <div className="text-4xl font-bold text-gray-900">{viewCount}</div>
                   <div className="text-lg text-gray-600">Views</div>
                 </div>
               </div>
