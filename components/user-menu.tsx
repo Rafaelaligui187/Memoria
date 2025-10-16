@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import Image from "next/image"
 
 export function UserMenu() {
   const { user, logout } = useAuth()
@@ -48,11 +49,21 @@ export function UserMenu() {
             variant="ghost"
             className="flex items-center gap-3 rounded-full bg-card px-4 py-2 hover:bg-muted transition-colors shadow-sm border"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/80 text-sm font-bold text-primary-foreground shadow-sm">
-              {user.initials ?? "U"}
-            </div>
+            {user.profilePhoto ? (
+              <Image
+                src={user.profilePhoto}
+                alt="Profile"
+                width={32}
+                height={32}
+                className="rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/80 text-sm font-bold text-primary-foreground shadow-sm">
+                {user.initials ?? "U"}
+              </div>
+            )}
             <div className="hidden text-left sm:block">
-              <p className="text-sm font-semibold text-foreground">{user.name ?? "User"}</p>
+              <p className="text-sm font-semibold text-foreground">{user.name ?? user.firstName ?? "User"}</p>
               <p className="text-xs text-muted-foreground">
                 {user.schoolId ? `ID: ${user.schoolId}` : "Yearbook Member"}
               </p>
@@ -64,11 +75,21 @@ export function UserMenu() {
         <DropdownMenuContent align="end" className="w-64 p-2">
           <DropdownMenuLabel className="font-normal px-2 py-3">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/80 text-sm font-bold text-primary-foreground">
-                {user.initials ?? "U"}
-              </div>
+              {user.profilePhoto ? (
+                <Image
+                  src={user.profilePhoto}
+                  alt="Profile"
+                  width={40}
+                  height={40}
+                  className="rounded-full object-cover"
+                />
+              ) : (
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/80 text-sm font-bold text-primary-foreground">
+                  {user.initials ?? "U"}
+                </div>
+              )}
               <div className="flex flex-col">
-                <p className="text-sm font-semibold leading-none">{user.name}</p>
+                <p className="text-sm font-semibold leading-none">{user.name ?? user.firstName ?? "User"}</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {user.schoolId ? `Student ID: ${user.schoolId}` : "Yearbook Member"}
                 </p>

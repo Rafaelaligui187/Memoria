@@ -8,6 +8,9 @@ interface User {
   schoolId?: string
   isAdmin?: boolean
   email?: string
+  profilePhoto?: string
+  firstName?: string
+  lastName?: string
 }
 
 interface AuthContextType {
@@ -17,6 +20,7 @@ interface AuthContextType {
   loginAdmin: (email: string, password: string) => Promise<boolean>
   login: (user: User) => void
   logout: () => void
+  updateUser: (updatedUser: User) => void
   isLoading: boolean
 }
 
@@ -118,6 +122,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.location.href = "/"
   }
 
+  const updateUser = (updatedUser: User) => {
+    localStorage.setItem("memoria_user", JSON.stringify(updatedUser))
+    setUser(updatedUser)
+  }
+
   const value = {
     user,
     isAuthenticated: !!user,
@@ -125,6 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loginAdmin,
     login,
     logout,
+    updateUser,
     isLoading,
   }
 

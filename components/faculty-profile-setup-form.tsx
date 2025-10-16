@@ -65,6 +65,7 @@ export function FacultyProfileSetupForm({
     departmentAssigned: "",
     yearsOfService: "",
     messageToStudents: "",
+    isARSister: false,
 
     // Additional Info
     courses: "",
@@ -391,28 +392,56 @@ export function FacultyProfileSetupForm({
         <CardContent className="px-0 pb-0 space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="position">Position *</Label>
-              <Input
-                id="position"
-                placeholder="Enter your position"
+              <Label htmlFor="position">Position/Role *</Label>
+              <Select
                 value={formData.position}
-                onChange={(e) => handleInputChange("position", e.target.value)}
-                className={errors.position ? "border-red-500" : ""}
-              />
+                onValueChange={(value) => {
+                  handleInputChange("position", value)
+                  // Reset department when position changes
+                  handleInputChange("departmentAssigned", "")
+                }}
+              >
+                <SelectTrigger className={errors.position ? "border-red-500" : ""}>
+                  <SelectValue placeholder="Select position/role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Department Head">Department Head</SelectItem>
+                  <SelectItem value="School Directress">School Directress</SelectItem>
+                  <SelectItem value="Teacher">Teacher</SelectItem>
+                </SelectContent>
+              </Select>
               {errors.position && <p className="text-sm text-red-500">{errors.position}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="departmentAssigned">Department *</Label>
+              <Label htmlFor="departmentAssigned">Department Assigned *</Label>
               <Select value={formData.departmentAssigned} onValueChange={(value) => handleInputChange("departmentAssigned", value)}>
                 <SelectTrigger className={errors.departmentAssigned ? "border-red-500" : ""}>
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Elementary">Elementary</SelectItem>
-                  <SelectItem value="Junior High">Junior High</SelectItem>
-                  <SelectItem value="Senior High">Senior High</SelectItem>
-                  <SelectItem value="College">College</SelectItem>
-                  <SelectItem value="Administration">Administration</SelectItem>
+                  {/* Dynamic department options based on position */}
+                  {formData.position === "School Directress" ? (
+                    <SelectItem value="School Dean">School Dean</SelectItem>
+                  ) : (formData.position === "Department Head" || formData.position === "Teacher") ? (
+                    <>
+                      <SelectItem value="College of Computer Studies">College of Computer Studies</SelectItem>
+                      <SelectItem value="College of Hospitality Management">College of Hospitality Management</SelectItem>
+                      <SelectItem value="College of Education">College of Education</SelectItem>
+                      <SelectItem value="College of Agriculture">College of Agriculture</SelectItem>
+                      <SelectItem value="Elementary Department">Elementary Department</SelectItem>
+                      <SelectItem value="Junior High School Department">Junior High School Department</SelectItem>
+                      <SelectItem value="Senior High School Department">Senior High School Department</SelectItem>
+                      <SelectItem value="Administration">Administration</SelectItem>
+                    </>
+                  ) : (
+                    <>
+                      <SelectItem value="Elementary">Elementary</SelectItem>
+                      <SelectItem value="Junior High">Junior High</SelectItem>
+                      <SelectItem value="Senior High">Senior High</SelectItem>
+                      <SelectItem value="College">College</SelectItem>
+                      <SelectItem value="Administration">Administration</SelectItem>
+                    </>
+                  )}
                 </SelectContent>
               </Select>
               {errors.departmentAssigned && <p className="text-sm text-red-500">{errors.departmentAssigned}</p>}
@@ -428,6 +457,24 @@ export function FacultyProfileSetupForm({
                 className={errors.yearsOfService ? "border-red-500" : ""}
               />
               {errors.yearsOfService && <p className="text-sm text-red-500">{errors.yearsOfService}</p>}
+            </div>
+            
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="isARSister"
+                  checked={formData.isARSister}
+                  onChange={(e) => handleInputChange("isARSister", e.target.checked.toString())}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <Label htmlFor="isARSister" className="text-sm font-medium">
+                  AR Sister (A.R.)
+                </Label>
+              </div>
+              <p className="text-xs text-gray-500">
+                Check this if you are an AR Sister (A.R.)
+              </p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="courses">Courses Taught</Label>

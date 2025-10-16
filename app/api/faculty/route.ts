@@ -66,6 +66,7 @@ export async function GET(request: NextRequest) {
       featured: profile.featured || false,
       achievements: profile.achievements || [],
       additionalRoles: profile.additionalRoles || [],
+      isARSister: profile.isARSister || false, // Add AR sister identification
       // Additional fields for compatibility
       fullName: profile.fullName || profile.name,
       nickname: profile.nickname || "",

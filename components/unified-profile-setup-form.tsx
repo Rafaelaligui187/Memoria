@@ -139,6 +139,7 @@ export function UnifiedProfileSetupForm({
     customDepartmentAssigned: "",
     yearsOfService: "",
     messageToStudents: "",
+    isARSister: false,
 
     // Staff fields (includes maintenance)
     officeAssigned: "",
@@ -435,6 +436,7 @@ export function UnifiedProfileSetupForm({
               departmentAssigned: existingProfile.departmentAssigned || "",
               yearsOfService: existingProfile.yearsOfService?.toString() || "",
               messageToStudents: existingProfile.messageToStudents || "",
+              isARSister: existingProfile.isARSister || false,
 
               // Staff fields
               officeAssigned: existingProfile.officeAssigned || "",
@@ -653,6 +655,7 @@ export function UnifiedProfileSetupForm({
           messageToStudents: formData.messageToStudents,
           courses: formData.courses,
           additionalRoles: formData.additionalRoles,
+          isARSister: formData.isARSister,
         }),
         
         ...((selectedRole === "staff" || selectedRole === "utility") && {
@@ -1297,17 +1300,49 @@ export function UnifiedProfileSetupForm({
               <CardContent className="px-0 pb-0 space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="position">Position/Role *</Label>
-                  <Input
-                    id="position"
-                    placeholder={
-                      selectedRole === "faculty"
-                        ? "Teacher, Dean, Adviser"
-                        : "Librarian, Registrar, Maintenance Technician"
-                    }
+                  <Select
                     value={formData.position}
-                    onChange={(e) => handleInputChange("position", e.target.value)}
-                    className={errors.position ? "border-red-500" : ""}
-                  />
+                    onValueChange={(value) => {
+                      handleInputChange("position", value)
+                      // Reset department when position changes
+                      handleInputChange("departmentAssigned", "")
+                      handleInputChange("customDepartmentAssigned", "")
+                    }}
+                  >
+                    <SelectTrigger className={errors.position ? "border-red-500" : ""}>
+                      <SelectValue placeholder="Select position/role" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {selectedRole === "faculty" ? (
+                        <>
+                          <SelectItem value="Department Head">Department Head</SelectItem>
+                          <SelectItem value="School Directress">School Directress</SelectItem>
+                          <SelectItem value="Teacher">Teacher</SelectItem>
+                        </>
+                      ) : selectedRole === "staff" ? (
+                        <>
+                          <SelectItem value="Librarian">Librarian</SelectItem>
+                          <SelectItem value="Registrar">Registrar</SelectItem>
+                          <SelectItem value="Finance Officer">Finance Officer</SelectItem>
+                          <SelectItem value="HR Officer">HR Officer</SelectItem>
+                          <SelectItem value="IT Support">IT Support</SelectItem>
+                          <SelectItem value="Guidance Counselor">Guidance Counselor</SelectItem>
+                          <SelectItem value="Security Guard">Security Guard</SelectItem>
+                          <SelectItem value="Others">Others</SelectItem>
+                        </>
+                      ) : (
+                        <>
+                          <SelectItem value="Maintenance Technician">Maintenance Technician</SelectItem>
+                          <SelectItem value="Security Guard">Security Guard</SelectItem>
+                          <SelectItem value="Custodian">Custodian</SelectItem>
+                          <SelectItem value="Groundskeeper">Groundskeeper</SelectItem>
+                          <SelectItem value="IT Support">IT Support</SelectItem>
+                          <SelectItem value="Facilities Manager">Facilities Manager</SelectItem>
+                          <SelectItem value="Others">Others</SelectItem>
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
                   {errors.position && <p className="text-sm text-red-600">{errors.position}</p>}
                 </div>
 
@@ -1346,12 +1381,31 @@ export function UnifiedProfileSetupForm({
                     <SelectContent>
                       {selectedRole === "faculty" ? (
                         <>
-                          <SelectItem value="Elementary">Elementary</SelectItem>
-                          <SelectItem value="Junior High">Junior High</SelectItem>
-                          <SelectItem value="Senior High">Senior High</SelectItem>
-                          <SelectItem value="College">College</SelectItem>
-                          <SelectItem value="Administration">Administration</SelectItem>
-                          <SelectItem value="Others">Others</SelectItem>
+                          {/* Dynamic department options based on position */}
+                          {formData.position === "School Directress" ? (
+                            <SelectItem value="School Dean">School Dean</SelectItem>
+                          ) : (formData.position === "Department Head" || formData.position === "Teacher") ? (
+                            <>
+                              <SelectItem value="College of Computer Studies">College of Computer Studies</SelectItem>
+                              <SelectItem value="College of Hospitality Management">College of Hospitality Management</SelectItem>
+                              <SelectItem value="College of Education">College of Education</SelectItem>
+                              <SelectItem value="College of Agriculture">College of Agriculture</SelectItem>
+                              <SelectItem value="Elementary Department">Elementary Department</SelectItem>
+                              <SelectItem value="Junior High School Department">Junior High School Department</SelectItem>
+                              <SelectItem value="Senior High School Department">Senior High School Department</SelectItem>
+                              <SelectItem value="Administration">Administration</SelectItem>
+                              <SelectItem value="Others">Others</SelectItem>
+                            </>
+                          ) : (
+                            <>
+                              <SelectItem value="Elementary">Elementary</SelectItem>
+                              <SelectItem value="Junior High">Junior High</SelectItem>
+                              <SelectItem value="Senior High">Senior High</SelectItem>
+                              <SelectItem value="College">College</SelectItem>
+                              <SelectItem value="Administration">Administration</SelectItem>
+                              <SelectItem value="Others">Others</SelectItem>
+                            </>
+                          )}
                         </>
                       ) : selectedRole === "staff" ? (
                         <>
@@ -1435,6 +1489,26 @@ export function UnifiedProfileSetupForm({
                   />
                   {errors.yearsOfService && <p className="text-sm text-red-600">{errors.yearsOfService}</p>}
                 </div>
+
+                {selectedRole === "faculty" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="checkbox"
+                        id="isARSister"
+                        checked={formData.isARSister}
+                        onChange={(e) => handleInputChange("isARSister", e.target.checked.toString())}
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <Label htmlFor="isARSister" className="text-sm font-medium">
+                        AR Sister (A.R.)
+                      </Label>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      Check this if you are an AR Sister (A.R.)
+                    </p>
+                  </div>
+                )}
 
                 {(selectedRole === "faculty" || selectedRole === "staff" || selectedRole === "utility") && (
                   <>

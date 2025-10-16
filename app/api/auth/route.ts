@@ -16,6 +16,7 @@ interface User {
   createdAt: Date
   updatedAt: Date
   lastLogin?: Date
+  profilePhoto?: string
 }
 
 // Admin credentials for hardcoded admin access
@@ -109,10 +110,13 @@ export async function POST(request: Request) {
         schoolId: user.schoolId,
         firstName: user.firstName,
         lastName: user.lastName,
+        name: `${user.firstName} ${user.lastName}`,
+        initials: `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase(),
         email: user.email,
         userType: user.userType,
         isActive: user.isActive,
         lastLogin: user.lastLogin,
+        profilePhoto: user.profilePhoto,
       }
 
       return NextResponse.json({
@@ -194,6 +198,8 @@ export async function POST(request: Request) {
           schoolId: newUser.schoolId,
           firstName: newUser.firstName,
           lastName: newUser.lastName,
+          name: `${newUser.firstName} ${newUser.lastName}`,
+          initials: `${newUser.firstName.charAt(0)}${newUser.lastName.charAt(0)}`.toUpperCase(),
           email: newUser.email,
           userType: newUser.userType,
           isActive: newUser.isActive,
@@ -212,6 +218,261 @@ export async function POST(request: Request) {
           message: "Failed to create account. Please try again."
         }, { status: 500 })
       }
+    }
+
+    // Change password
+    if (action === "change-password") {
+      const { currentPassword, newPassword, userId } = body
+
+      if (!currentPassword || !newPassword || !userId) {
+        return NextResponse.json({
+          success: false,
+          message: "Current password, new password, and user ID are required"
+        }, { status: 400 })
+      }
+
+      // Validate new password
+      const passwordValidation = validatePassword(newPassword)
+      if (!passwordValidation.isValid) {
+        return NextResponse.json({
+          success: false,
+          message: "Password validation failed",
+          errors: passwordValidation.errors
+        }, { status: 400 })
+      }
+
+      const db = await connectToDatabase()
+      const usersCollection = db.collection("users")
+
+      // Find user by ID
+      const user = await usersCollection.findOne({
+        _id: new ObjectId(userId),
+        isActive: true
+      })
+
+      if (!user) {
+        return NextResponse.json({
+          success: false,
+          message: "User not found"
+        }, { status: 404 })
+      }
+
+      // Verify current password
+      const isCurrentPasswordValid = await verifyPassword(currentPassword, user.password)
+      if (!isCurrentPasswordValid) {
+        return NextResponse.json({
+          success: false,
+          message: "Current password is incorrect"
+        }, { status: 400 })
+      }
+
+      // Hash new password
+      const hashedNewPassword = await hashPassword(newPassword)
+
+      // Update password in database
+      const updateResult = await usersCollection.updateOne(
+        { _id: new ObjectId(userId) },
+        { 
+          $set: { 
+            password: hashedNewPassword,
+            updatedAt: new Date()
+          }
+        }
+      )
+
+      // Verify the update was successful
+      if (updateResult.modifiedCount === 0) {
+        console.error("Password update failed - no documents modified")
+        return NextResponse.json({
+          success: false,
+          message: "Failed to update password. Please try again."
+        }, { status: 500 })
+      }
+
+      console.log(`Password successfully changed for user ${userId}`)
+      return NextResponse.json({
+        success: true,
+        message: "Password changed successfully"
+      })
+    }
+
+    // Update profile photo
+    if (action === "update-profile-photo") {
+      const { userId, profilePhoto } = body
+
+      if (!userId || !profilePhoto) {
+        return NextResponse.json({
+          success: false,
+          message: "User ID and profile photo URL are required"
+        }, { status: 400 })
+      }
+
+      const db = await connectToDatabase()
+      const usersCollection = db.collection("users")
+
+      // Find user by ID
+      const user = await usersCollection.findOne({
+        _id: new ObjectId(userId),
+        isActive: true
+      })
+
+      if (!user) {
+        return NextResponse.json({
+          success: false,
+          message: "User not found"
+        }, { status: 404 })
+      }
+
+      // Update profile photo in database
+      const updateResult = await usersCollection.updateOne(
+        { _id: new ObjectId(userId) },
+        { 
+          $set: { 
+            profilePhoto: profilePhoto,
+            updatedAt: new Date()
+          }
+        }
+      )
+
+      // Verify the update was successful
+      if (updateResult.modifiedCount === 0) {
+        console.error("Profile photo update failed - no documents modified")
+        return NextResponse.json({
+          success: false,
+          message: "Failed to update profile photo. Please try again."
+        }, { status: 500 })
+      }
+
+      console.log(`Profile photo successfully updated for user ${userId}`)
+      return NextResponse.json({
+        success: true,
+        message: "Profile photo updated successfully",
+        profilePhoto: profilePhoto
+      })
+    }
+
+    // Remove profile photo
+    if (action === "remove-profile-photo") {
+      const { userId } = body
+
+      if (!userId) {
+        return NextResponse.json({
+          success: false,
+          message: "User ID is required"
+        }, { status: 400 })
+      }
+
+      const db = await connectToDatabase()
+      const usersCollection = db.collection("users")
+
+      // Find user by ID
+      const user = await usersCollection.findOne({
+        _id: new ObjectId(userId),
+        isActive: true
+      })
+
+      if (!user) {
+        return NextResponse.json({
+          success: false,
+          message: "User not found"
+        }, { status: 404 })
+      }
+
+      // Remove profile photo from database
+      const updateResult = await usersCollection.updateOne(
+        { _id: new ObjectId(userId) },
+        { 
+          $unset: { 
+            profilePhoto: ""
+          },
+          $set: {
+            updatedAt: new Date()
+          }
+        }
+      )
+
+      // Verify the update was successful
+      if (updateResult.modifiedCount === 0) {
+        console.error("Profile photo removal failed - no documents modified")
+        return NextResponse.json({
+          success: false,
+          message: "Failed to remove profile photo. Please try again."
+        }, { status: 500 })
+      }
+
+      console.log(`Profile photo successfully removed for user ${userId}`)
+      return NextResponse.json({
+        success: true,
+        message: "Profile photo removed successfully"
+      })
+    }
+
+    // Update user settings
+    if (action === "update-user-settings") {
+      const { userId, theme, emailNotifications, email } = body
+
+      if (!userId) {
+        return NextResponse.json({
+          success: false,
+          message: "User ID is required"
+        }, { status: 400 })
+      }
+
+      const db = await connectToDatabase()
+      const usersCollection = db.collection("users")
+
+      // Find user by ID
+      const user = await usersCollection.findOne({
+        _id: new ObjectId(userId),
+        isActive: true
+      })
+
+      if (!user) {
+        return NextResponse.json({
+          success: false,
+          message: "User not found"
+        }, { status: 404 })
+      }
+
+      // Prepare update object
+      const updateData: any = {
+        updatedAt: new Date()
+      }
+
+      if (email !== undefined) {
+        updateData.email = email
+      }
+
+      if (emailNotifications !== undefined) {
+        updateData.emailNotifications = emailNotifications
+      }
+
+      if (theme !== undefined) {
+        updateData.theme = theme
+      }
+
+      // Update user settings in database
+      const updateResult = await usersCollection.updateOne(
+        { _id: new ObjectId(userId) },
+        { 
+          $set: updateData
+        }
+      )
+
+      // Verify the update was successful
+      if (updateResult.modifiedCount === 0) {
+        console.error("User settings update failed - no documents modified")
+        return NextResponse.json({
+          success: false,
+          message: "Failed to update settings. Please try again."
+        }, { status: 500 })
+      }
+
+      console.log(`User settings successfully updated for user ${userId}`)
+      return NextResponse.json({
+        success: true,
+        message: "Settings updated successfully"
+      })
     }
 
     // Forgot password

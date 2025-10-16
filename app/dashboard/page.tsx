@@ -113,7 +113,8 @@ export default function Dashboard() {
 
   // Determine what to display for the user
   const userId = user?.schoolId || "N/A"
-  const displayName = user?.name || userId
+  // Use the user's actual name from the database
+  const displayName = user?.name || user?.firstName || userId
   const avatarInitial = displayName.charAt(0).toUpperCase()
 
   return (

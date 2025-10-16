@@ -21,6 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { ImageIcon, MoreHorizontal, Edit, Trash2, FolderPlus, Grid, List, Search, Star, Calendar, MapPin, User, Clock } from "lucide-react"
 import { CreateAlbumForm } from "@/components/create-album-form"
+import { EditAlbumDialog } from "@/components/edit-album-dialog"
 import { 
   getAlbums, 
   getMediaItems, 
@@ -46,6 +47,8 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
   const [loading, setLoading] = useState(true)
 
   const [createAlbumOpen, setCreateAlbumOpen] = useState(false)
+  const [editAlbumOpen, setEditAlbumOpen] = useState(false)
+  const [selectedAlbumForEdit, setSelectedAlbumForEdit] = useState<AlbumData | null>(null)
   const [deleteAlbumOpen, setDeleteAlbumOpen] = useState(false)
   const [albumToDelete, setAlbumToDelete] = useState<AlbumData | null>(null)
 
@@ -89,6 +92,14 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
   const handleAlbumCreated = (newAlbum: AlbumData) => {
     setAlbums(prev => [...prev, newAlbum])
     loadData() // Refresh to get updated media count
+  }
+
+  const handleAlbumUpdated = (updatedAlbum: AlbumData) => {
+    setAlbums(prev => 
+      prev.map(album => 
+        album.id === updatedAlbum.id ? updatedAlbum : album
+      )
+    )
   }
 
   const filteredMediaItems = mediaItems.filter((item) => {
@@ -217,7 +228,6 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
         <TabsList>
           <TabsTrigger value="albums">Albums</TabsTrigger>
           <TabsTrigger value="media">All Media</TabsTrigger>
-          <TabsTrigger value="pending">Pending Approval</TabsTrigger>
         </TabsList>
 
         <TabsContent value="albums" className="space-y-4">
@@ -258,11 +268,10 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setSelectedAlbum(album)}>
-                              <ImageIcon className="mr-2 h-4 w-4" />
-                              View Media
-                            </DropdownMenuItem>
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => {
+                              setSelectedAlbumForEdit(album)
+                              setEditAlbumOpen(true)
+                            }}>
                               <Edit className="mr-2 h-4 w-4" />
                               Edit Album
                             </DropdownMenuItem>
@@ -484,61 +493,6 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
             </Card>
           )}
         </TabsContent>
-
-        <TabsContent value="pending" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Pending Media Approval</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {mediaItems
-                .filter((item) => item.status === "pending")
-                .map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center gap-4">
-                      <img
-                        src={item.thumbnailUrl || "/placeholder.svg"}
-                        alt={item.filename}
-                        className="w-16 h-16 object-cover rounded"
-                      />
-                      <div>
-                        <h4 className="font-medium">{item.filename}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Uploaded by {item.uploadedBy} • {formatFileSize(item.fileSize)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(item.uploadedAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        className="text-red-600 border-red-600 bg-transparent"
-                        onClick={() => handleMediaStatusChange(item.id, 'rejected')}
-                      >
-                        Reject
-                      </Button>
-                      <Button 
-                        size="sm" 
-                        className="bg-green-600 hover:bg-green-700"
-                        onClick={() => handleMediaStatusChange(item.id, 'approved')}
-                      >
-                        Approve
-                      </Button>
-                    </div>
-                  </div>
-                ))}
-              {mediaItems.filter((item) => item.status === "pending").length === 0 && (
-                <div className="text-center py-8">
-                  <ImageIcon className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No media pending approval</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
 
       {/* Create Album Form */}
@@ -547,6 +501,15 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
         onOpenChange={setCreateAlbumOpen}
         selectedYear={selectedYear}
         onAlbumCreated={handleAlbumCreated}
+      />
+
+      {/* Edit Album Dialog */}
+      <EditAlbumDialog
+        open={editAlbumOpen}
+        onOpenChange={setEditAlbumOpen}
+        album={selectedAlbumForEdit}
+        onAlbumUpdated={handleAlbumUpdated}
+        schoolYearId={selectedYear}
       />
 
       {/* Delete Album Dialog */}

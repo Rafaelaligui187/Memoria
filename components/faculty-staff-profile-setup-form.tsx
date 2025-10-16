@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { X, Plus, Upload, Save, User, Briefcase, Heart, ArrowLeft, AlertCircle, Share2, Award } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import Image from "next/image"
@@ -51,6 +52,7 @@ export function FacultyStaffProfileSetupForm({
     bio: "",
     courses: "",
     additionalRoles: "",
+    isARSister: false,
   })
 
   // Get school year label for display
@@ -378,26 +380,93 @@ export function FacultyStaffProfileSetupForm({
             </CardHeader>
             <CardContent className="px-0 pb-0 space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="position">Position *</Label>
-                <Input
-                  id="position"
-                  placeholder={userRole === "faculty" ? "Professor" : "Administrative Assistant"}
+                <Label htmlFor="position">Position/Role *</Label>
+                <Select
                   value={formData.position}
-                  onChange={(e) => handleInputChange("position", e.target.value)}
-                  className={errors.position ? "border-red-500" : ""}
-                />
+                  onValueChange={(value) => {
+                    handleInputChange("position", value)
+                    // Reset department when position changes
+                    handleInputChange("department", "")
+                  }}
+                >
+                  <SelectTrigger className={errors.position ? "border-red-500" : ""}>
+                    <SelectValue placeholder="Select position/role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {userRole === "faculty" ? (
+                      <>
+                        <SelectItem value="Department Head">Department Head</SelectItem>
+                        <SelectItem value="School Directress">School Directress</SelectItem>
+                        <SelectItem value="Teacher">Teacher</SelectItem>
+                      </>
+                    ) : (
+                      <>
+                        <SelectItem value="Librarian">Librarian</SelectItem>
+                        <SelectItem value="Registrar">Registrar</SelectItem>
+                        <SelectItem value="Finance Officer">Finance Officer</SelectItem>
+                        <SelectItem value="HR Officer">HR Officer</SelectItem>
+                        <SelectItem value="IT Support">IT Support</SelectItem>
+                        <SelectItem value="Guidance Counselor">Guidance Counselor</SelectItem>
+                        <SelectItem value="Security Guard">Security Guard</SelectItem>
+                        <SelectItem value="Others">Others</SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
                 {errors.position && <p className="text-sm text-red-600">{errors.position}</p>}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="department">Department *</Label>
-                <Input
-                  id="department"
-                  placeholder="Computer Science Department"
+                <Label htmlFor="department">Department Assigned *</Label>
+                <Select
                   value={formData.department}
-                  onChange={(e) => handleInputChange("department", e.target.value)}
-                  className={errors.department ? "border-red-500" : ""}
-                />
+                  onValueChange={(value) => handleInputChange("department", value)}
+                >
+                  <SelectTrigger className={errors.department ? "border-red-500" : ""}>
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {userRole === "faculty" ? (
+                      <>
+                        {/* Dynamic department options based on position */}
+                        {formData.position === "School Directress" ? (
+                          <SelectItem value="School Dean">School Dean</SelectItem>
+                        ) : (formData.position === "Department Head" || formData.position === "Teacher") ? (
+                          <>
+                            <SelectItem value="College of Computer Studies">College of Computer Studies</SelectItem>
+                            <SelectItem value="College of Hospitality Management">College of Hospitality Management</SelectItem>
+                            <SelectItem value="College of Education">College of Education</SelectItem>
+                            <SelectItem value="College of Agriculture">College of Agriculture</SelectItem>
+                            <SelectItem value="Elementary Department">Elementary Department</SelectItem>
+                            <SelectItem value="Junior High School Department">Junior High School Department</SelectItem>
+                            <SelectItem value="Senior High School Department">Senior High School Department</SelectItem>
+                            <SelectItem value="Administration">Administration</SelectItem>
+                          </>
+                        ) : (
+                          <>
+                            <SelectItem value="Elementary">Elementary</SelectItem>
+                            <SelectItem value="Junior High">Junior High</SelectItem>
+                            <SelectItem value="Senior High">Senior High</SelectItem>
+                            <SelectItem value="College">College</SelectItem>
+                            <SelectItem value="Administration">Administration</SelectItem>
+                          </>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <SelectItem value="Administration">Administration</SelectItem>
+                        <SelectItem value="Registrar">Registrar</SelectItem>
+                        <SelectItem value="Finance">Finance</SelectItem>
+                        <SelectItem value="Human Resources">Human Resources</SelectItem>
+                        <SelectItem value="IT Department">IT Department</SelectItem>
+                        <SelectItem value="Library">Library</SelectItem>
+                        <SelectItem value="Guidance">Guidance</SelectItem>
+                        <SelectItem value="Security">Security</SelectItem>
+                        <SelectItem value="Maintenance">Maintenance</SelectItem>
+                      </>
+                    )}
+                  </SelectContent>
+                </Select>
                 {errors.department && <p className="text-sm text-red-600">{errors.department}</p>}
               </div>
 
@@ -411,6 +480,26 @@ export function FacultyStaffProfileSetupForm({
                   onChange={(e) => handleInputChange("yearsOfService", e.target.value)}
                 />
               </div>
+
+              {userRole === "faculty" && (
+                <div className="space-y-2">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="isARSister"
+                      checked={formData.isARSister}
+                      onChange={(e) => handleInputChange("isARSister", e.target.checked.toString())}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <Label htmlFor="isARSister" className="text-sm font-medium">
+                      AR Sister (A.R.)
+                    </Label>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Check this if you are an AR Sister (A.R.)
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="bio">Bio *</Label>

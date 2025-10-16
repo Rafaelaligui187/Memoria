@@ -300,22 +300,24 @@ export async function updateAlbum(id: string, updates: Partial<AlbumData>): Prom
   }
 }
 
-export async function deleteAlbum(id: string): Promise<boolean> {
+export async function getAlbumReports(albumId: string, schoolYearId?: string): Promise<any[]> {
   try {
-    const response = await fetch(`/api/gallery/albums/${id}`, {
-      method: 'DELETE',
-    })
-
+    const params = new URLSearchParams()
+    if (schoolYearId) params.append('schoolYearId', schoolYearId)
+    
+    const response = await fetch(`/api/reports/album/${albumId}?${params.toString()}`)
+    
     if (!response.ok) {
-      if (response.status === 404) return false
+      if (response.status === 404) return []
       const error = await response.json()
-      throw new Error(error.error || 'Failed to delete album')
+      throw new Error(error.error || 'Failed to fetch album reports')
     }
 
-    return true
+    const result = await response.json()
+    return result.data || []
   } catch (error) {
-    console.error('Error deleting album:', error)
-    return false
+    console.error('Error fetching album reports:', error)
+    return []
   }
 }
 

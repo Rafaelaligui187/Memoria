@@ -31,6 +31,7 @@ export interface FacultyMember {
   research?: string[]
   classesHandled?: string[]
   gallery?: string[]
+  isARSister?: boolean // Add AR sister identification
 }
 
 export const facultyData: FacultyMember[] = [

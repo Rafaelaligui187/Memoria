@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"  
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -9,8 +9,11 @@ import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Upload, Palette, Bell, Shield, User, Trash2, Save, Eye, EyeOff } from "lucide-react"
+import { Upload, Palette, Bell, User, Trash2, Save, X } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/auth-context"
+import Image from "next/image"
+import { uploadProfileImage, validateImageFile, getImagePreviewUrl } from "@/lib/image-upload-utils"
 
 interface CustomizeDialogProps {
   open: boolean
@@ -18,31 +21,178 @@ interface CustomizeDialogProps {
 }
 
 export function CustomizeDialog({ open, onOpenChange }: CustomizeDialogProps) {
+  const { user, updateUser } = useAuth()
   const [theme, setTheme] = useState("system")
   const [emailNotifications, setEmailNotifications] = useState(true)
-  const [profileVisibility, setProfileVisibility] = useState(true)
-  const [showAchievements, setShowAchievements] = useState(true)
-  const [showActivities, setShowActivities] = useState(true)
-  const [showGallery, setShowGallery] = useState(true)
   const [passwords, setPasswords] = useState({
     current: "",
     new: "",
     confirm: "",
   })
   const [newEmail, setNewEmail] = useState("")
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null)
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
+  const [isRemovingPhoto, setIsRemovingPhoto] = useState(false)
+  const [shouldRemovePhoto, setShouldRemovePhoto] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleSave = () => {
-    console.log("[v0] Saving customization settings:", {
-      theme,
-      emailNotifications,
-      profileVisibility,
-      showAchievements,
-      showActivities,
-      showGallery,
-      newEmail,
-    })
+  const getUserId = () => {
+    if (!user) return ""
+    return (user as any).id || (user as any).schoolId || ""
+  }
 
-    if (passwords.new && passwords.new !== passwords.confirm) {
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    // Validate file
+    const validationError = validateImageFile(file)
+    if (validationError) {
+      toast({
+        title: "Invalid file",
+        description: validationError,
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsUploadingPhoto(true)
+    try {
+      // Show preview immediately
+      const previewUrl = await getImagePreviewUrl(file)
+      setProfilePhoto(previewUrl)
+
+      // Upload to IMGBB
+      const uploadResult = await uploadProfileImage(file)
+      
+      if (uploadResult.success) {
+        // Update user profile photo in database
+        const userId = getUserId()
+        if (userId) {
+          const response = await fetch('/api/auth', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              action: 'update-profile-photo',
+              userId: userId,
+              profilePhoto: uploadResult.url,
+            }),
+          })
+
+          const data = await response.json()
+          
+          if (data.success) {
+            // Update user context with new profile photo
+            if (updateUser) {
+              updateUser({ ...user, profilePhoto: uploadResult.url })
+            }
+            
+            toast({
+              title: "Profile photo updated successfully!",
+              description: "Your profile photo has been updated.",
+            })
+          } else {
+            toast({
+              title: "Update failed",
+              description: data.message || "Failed to update profile photo",
+              variant: "destructive",
+            })
+            setProfilePhoto(null)
+          }
+        }
+      } else {
+        toast({
+          title: "Upload failed",
+          description: uploadResult.error || "Failed to upload image",
+          variant: "destructive",
+        })
+        setProfilePhoto(null)
+      }
+    } catch (error) {
+      console.error("Photo upload error:", error)
+      toast({
+        title: "Upload failed",
+        description: "An error occurred while uploading the image",
+        variant: "destructive",
+      })
+      setProfilePhoto(null)
+    } finally {
+      setIsUploadingPhoto(false)
+    }
+  }
+
+  const handleRemovePhoto = async () => {
+    setIsRemovingPhoto(true)
+    try {
+      const userId = getUserId()
+      if (userId) {
+        // Call API to remove profile photo from database
+        const response = await fetch('/api/auth', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'remove-profile-photo',
+            userId: userId,
+          }),
+        })
+
+        const data = await response.json()
+        
+        if (data.success) {
+          // Update user context to remove profile photo
+          if (updateUser) {
+            updateUser({ ...user, profilePhoto: null })
+          }
+          
+          // Clear local state
+          setProfilePhoto(null)
+          setShouldRemovePhoto(false)
+          
+          // Clear file input
+          if (fileInputRef.current) {
+            fileInputRef.current.value = ""
+          }
+          
+          toast({
+            title: "Profile photo removed successfully!",
+            description: "Your profile photo has been removed.",
+          })
+        } else {
+          toast({
+            title: "Remove failed",
+            description: data.message || "Failed to remove profile photo",
+            variant: "destructive",
+          })
+        }
+      }
+    } catch (error) {
+      console.error("Photo removal error:", error)
+      toast({
+        title: "Remove failed",
+        description: "An error occurred while removing the profile photo",
+        variant: "destructive",
+      })
+    } finally {
+      setIsRemovingPhoto(false)
+    }
+  }
+
+  const handlePasswordChange = async () => {
+    if (!passwords.current || !passwords.new || !passwords.confirm) {
+      toast({
+        title: "Missing fields",
+        description: "Please fill in all password fields.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (passwords.new !== passwords.confirm) {
       toast({
         title: "Password mismatch",
         description: "New password and confirmation don't match.",
@@ -51,12 +201,157 @@ export function CustomizeDialog({ open, onOpenChange }: CustomizeDialogProps) {
       return
     }
 
-    toast({
-      title: "Settings saved successfully!",
-      description: "Your preferences have been updated.",
+    if (passwords.new.length < 8) {
+      toast({
+        title: "Password too short",
+        description: "New password must be at least 8 characters long.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (passwords.current === passwords.new) {
+      toast({
+        title: "Same password",
+        description: "New password must be different from your current password.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const userId = getUserId()
+    if (!userId) {
+      toast({
+        title: "Authentication error",
+        description: "Unable to identify user. Please log in again.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsChangingPassword(true)
+    try {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'change-password',
+          currentPassword: passwords.current,
+          newPassword: passwords.new,
+          userId: userId,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        toast({
+          title: "Password changed successfully!",
+          description: "Your password has been updated. You can now use your new password to log in.",
+        })
+        
+        // Clear password fields
+        setPasswords({
+          current: "",
+          new: "",
+          confirm: "",
+        })
+        
+        // Close dialog after successful password change
+        setTimeout(() => {
+          onOpenChange(false)
+        }, 2000)
+      } else {
+        toast({
+          title: "Password change failed",
+          description: data.message || "Failed to change password. Please try again.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error changing password:', error)
+      toast({
+        title: "Error",
+        description: "Failed to change password. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsChangingPassword(false)
+    }
+  }
+
+  const handleSave = async () => {
+    console.log("[v0] Saving customization settings:", {
+      theme,
+      emailNotifications,
+      newEmail,
     })
 
-    onOpenChange(false)
+    // Handle password change if passwords are provided
+    if (passwords.current || passwords.new || passwords.confirm) {
+      handlePasswordChange()
+      return
+    }
+
+    // Handle other settings updates
+    const userId = getUserId()
+    if (userId) {
+      try {
+        const response = await fetch('/api/auth', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            action: 'update-user-settings',
+            userId: userId,
+            theme: theme,
+            emailNotifications: emailNotifications,
+            email: newEmail || undefined,
+          }),
+        })
+
+        const data = await response.json()
+        
+        if (data.success) {
+          // Update user context with new settings
+          if (updateUser) {
+            updateUser({ 
+              ...user, 
+              email: newEmail || user?.email 
+            })
+          }
+          
+          toast({
+            title: "Settings saved successfully!",
+            description: "Your preferences have been updated.",
+          })
+          
+          onOpenChange(false)
+        } else {
+          toast({
+            title: "Save failed",
+            description: data.message || "Failed to save settings",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Settings save error:", error)
+        toast({
+          title: "Save failed",
+          description: "An error occurred while saving settings",
+          variant: "destructive",
+        })
+      }
+    } else {
+      toast({
+        title: "Settings saved successfully!",
+        description: "Your preferences have been updated.",
+      })
+      onOpenChange(false)
+    }
   }
 
   return (
@@ -80,11 +375,59 @@ export function CustomizeDialog({ open, onOpenChange }: CustomizeDialogProps) {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="profilePhoto">Change Profile Photo</Label>
+                
+                {/* Current Profile Photo Display */}
+                {(user?.profilePhoto || profilePhoto) && (
+                  <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                    <div className="relative">
+                      <Image
+                        src={profilePhoto || user?.profilePhoto || ""}
+                        alt="Profile preview"
+                        width={60}
+                        height={60}
+                        className="rounded-full object-cover"
+                      />
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="absolute -top-2 -right-2 h-6 w-6 rounded-full p-0"
+                        onClick={handleRemovePhoto}
+                        disabled={isRemovingPhoto}
+                      >
+                        {isRemovingPhoto ? (
+                          <div className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                        ) : (
+                          <X className="h-3 w-3" />
+                        )}
+                      </Button>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">Current Profile Photo</p>
+                      <p className="text-xs text-muted-foreground">Click remove to delete</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Upload Section */}
                 <div className="flex items-center gap-3 p-4 border-2 border-dashed border-muted rounded-lg">
                   <Upload className="h-5 w-5 text-muted-foreground" />
                   <div className="flex-1">
-                    <Button variant="outline" size="sm" className="mb-1 bg-transparent">
-                      Upload New Photo
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp"
+                      onChange={handlePhotoUpload}
+                      className="hidden"
+                      disabled={isUploadingPhoto}
+                    />
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mb-1 bg-transparent"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingPhoto}
+                    >
+                      {isUploadingPhoto ? "Uploading..." : "Upload New Photo"}
                     </Button>
                     <p className="text-xs text-muted-foreground">JPG, PNG up to 5MB</p>
                   </div>
@@ -195,64 +538,6 @@ export function CustomizeDialog({ open, onOpenChange }: CustomizeDialogProps) {
             </CardContent>
           </Card>
 
-          <Card className="border-accent/20">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Shield className="h-5 w-5 text-accent" />
-                Privacy Options
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {[
-                {
-                  id: "profileVisibility",
-                  label: "Profile Visibility",
-                  description: "Make your profile visible in the public yearbook",
-                  checked: profileVisibility,
-                  onChange: setProfileVisibility,
-                  icon: profileVisibility ? Eye : EyeOff,
-                },
-                {
-                  id: "showAchievements",
-                  label: "Show Achievements",
-                  description: "Display your achievements in your profile",
-                  checked: showAchievements,
-                  onChange: setShowAchievements,
-                  icon: Eye,
-                },
-                {
-                  id: "showActivities",
-                  label: "Show Activities",
-                  description: "Display your activities in your profile",
-                  checked: showActivities,
-                  onChange: setShowActivities,
-                  icon: Eye,
-                },
-                {
-                  id: "showGallery",
-                  label: "Show Gallery",
-                  description: "Display your gallery images in your profile",
-                  checked: showGallery,
-                  onChange: setShowGallery,
-                  icon: Eye,
-                },
-              ].map((setting) => (
-                <div key={setting.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <setting.icon className="h-4 w-4 text-muted-foreground" />
-                    <div className="space-y-0.5">
-                      <Label htmlFor={setting.id} className="font-medium">
-                        {setting.label}
-                      </Label>
-                      <p className="text-sm text-muted-foreground">{setting.description}</p>
-                    </div>
-                  </div>
-                  <Switch id={setting.id} checked={setting.checked} onCheckedChange={setting.onChange} />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-
           <Card className="border-destructive/30 bg-destructive/5">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-base text-destructive">
@@ -278,9 +563,13 @@ export function CustomizeDialog({ open, onOpenChange }: CustomizeDialogProps) {
             <Button variant="outline" onClick={() => onOpenChange(false)} className="px-6">
               Cancel
             </Button>
-            <Button onClick={handleSave} className="px-6 bg-primary hover:bg-primary/90">
+            <Button 
+              onClick={handleSave} 
+              className="px-6 bg-primary hover:bg-primary/90"
+              disabled={isChangingPassword}
+            >
               <Save className="mr-2 h-4 w-4" />
-              Save Changes
+              {isChangingPassword ? "Changing Password..." : "Save Changes"}
             </Button>
           </div>
         </div>
