@@ -49,7 +49,7 @@ export async function GET(
     }
 
     // Try other departments if not found in Senior High
-    const departments = ["College", "Junior High", "Elementary", "Alumni", "Faculty & Staff"]
+    const departments = ["College", "Junior High", "Elementary", "Alumni", "Faculty & Staff", "AR Sisters"]
     
     for (const department of departments) {
       try {

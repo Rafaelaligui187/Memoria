@@ -106,7 +106,7 @@ const getRoleTitle = (role: UserRole) => {
     case "student":
       return "Students"
     case "faculty":
-      return "Faculty"
+      return "Class Adviser"
     case "alumni":
       return "Alumni"
     case "staff":

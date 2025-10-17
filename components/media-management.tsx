@@ -19,13 +19,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { ImageIcon, MoreHorizontal, Edit, Trash2, FolderPlus, Grid, List, Search, Star, Calendar, MapPin, User, Clock } from "lucide-react"
+import { ImageIcon, MoreHorizontal, Edit, Trash2, FolderPlus, Grid, List, Search, Star, Calendar, MapPin, User, Clock, Eye } from "lucide-react"
 import { CreateAlbumForm } from "@/components/create-album-form"
 import { EditAlbumDialog } from "@/components/edit-album-dialog"
 import { 
   getAlbums, 
   getMediaItems, 
   deleteAlbum, 
+  deleteMediaItem,
   updateMediaStatus,
   type AlbumData,
   type MediaItem 
@@ -51,6 +52,10 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
   const [selectedAlbumForEdit, setSelectedAlbumForEdit] = useState<AlbumData | null>(null)
   const [deleteAlbumOpen, setDeleteAlbumOpen] = useState(false)
   const [albumToDelete, setAlbumToDelete] = useState<AlbumData | null>(null)
+  
+  // Media deletion states
+  const [deleteMediaOpen, setDeleteMediaOpen] = useState(false)
+  const [mediaToDelete, setMediaToDelete] = useState<MediaItem | null>(null)
 
   const { toast } = useToast()
 
@@ -113,21 +118,77 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
     if (!albumToDelete) return
 
     try {
-      await deleteAlbum(albumToDelete.id)
-      setAlbums(albums.filter((album) => album.id !== albumToDelete.id))
-      setMediaItems(mediaItems.filter((item) => item.albumId !== albumToDelete.id))
-      setDeleteAlbumOpen(false)
-      setAlbumToDelete(null)
+      console.log('[Media Management] Attempting to delete album:', albumToDelete.id)
+      console.log('[Media Management] Album data:', albumToDelete)
+      
+      const success = await deleteAlbum(albumToDelete.id)
+      console.log('[Media Management] Delete result:', success)
+      
+      if (success) {
+        setAlbums(albums.filter((album) => album.id !== albumToDelete.id))
+        setMediaItems(mediaItems.filter((item) => item.albumId !== albumToDelete.id))
+        setDeleteAlbumOpen(false)
+        setAlbumToDelete(null)
 
-      toast({
-        title: "Success",
-        description: "Album and all its media have been deleted.",
-      })
+        toast({
+          title: "Success",
+          description: "Album and all its media have been deleted.",
+        })
+      } else {
+        throw new Error("Delete operation returned false")
+      }
     } catch (error) {
-      console.error("Error deleting album:", error)
+      console.error("[Media Management] Error deleting album:", error)
+      console.error("[Media Management] Error details:", {
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        albumId: albumToDelete.id,
+        albumTitle: albumToDelete.title
+      })
+      
       toast({
         title: "Error",
-        description: "Failed to delete album.",
+        description: `Failed to delete album: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteMedia = async () => {
+    if (!mediaToDelete) return
+
+    try {
+      const success = await deleteMediaItem(mediaToDelete.id)
+      
+      if (success) {
+        // Remove from local state
+        setMediaItems(mediaItems.filter((item) => item.id !== mediaToDelete.id))
+        
+        // Update album media count
+        const album = albums.find(a => a.id === mediaToDelete.albumId)
+        if (album) {
+          setAlbums(albums.map(a => 
+            a.id === album.id 
+              ? { ...a, mediaCount: Math.max(0, a.mediaCount - 1) }
+              : a
+          ))
+        }
+        
+        setDeleteMediaOpen(false)
+        setMediaToDelete(null)
+
+        toast({
+          title: "Success",
+          description: "Media item has been deleted successfully.",
+        })
+      } else {
+        throw new Error("Failed to delete media item")
+      }
+    } catch (error) {
+      console.error("Error deleting media:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete media item.",
         variant: "destructive",
       })
     }
@@ -427,6 +488,31 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
                         {getStatusBadge(item.status)}
                       </div>
                       <p className="text-xs text-muted-foreground">{formatFileSize(item.fileSize)}</p>
+                      <div className="flex justify-end">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => window.open(item.url, '_blank')}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setMediaToDelete(item)
+                                setDeleteMediaOpen(true)
+                              }}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -478,9 +564,20 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem>View</DropdownMenuItem>
-                                <DropdownMenuItem>Edit</DropdownMenuItem>
-                                <DropdownMenuItem>Delete</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => window.open(item.url, '_blank')}>
+                                  <Eye className="mr-2 h-4 w-4" />
+                                  View
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setMediaToDelete(item)
+                                    setDeleteMediaOpen(true)
+                                  }}
+                                  className="text-red-600 focus:text-red-600"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </td>
@@ -529,6 +626,28 @@ export function MediaManagement({ selectedYear, selectedYearLabel }: MediaManage
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Delete Album
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Media Dialog */}
+      <AlertDialog open={deleteMediaOpen} onOpenChange={setDeleteMediaOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Media Item</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{mediaToDelete?.filename}"? This action cannot be undone.
+              The media will be permanently removed from the album.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteMedia}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete Media
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

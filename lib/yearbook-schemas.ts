@@ -108,6 +108,25 @@ export interface FacultyStaffYearbookEntry extends BaseYearbookEntry {
   additionalRoles?: string[]
 }
 
+// AR Sisters Yearbook Entry
+export interface ARSistersYearbookEntry extends BaseYearbookEntry {
+  // Religious & Professional Info for AR Sisters
+  department: string
+  position: string
+  customPosition?: string
+  yearsOfService?: number
+  departmentAssigned?: string
+  religiousOrder: string
+  vowsDate?: string
+  specialization?: string
+  education?: string
+  additionalRoles?: string[]
+  messageToStudents?: string
+  publications?: string
+  research?: string
+  classesHandled?: string
+}
+
 // Yearbook Page Schema
 export interface YearbookPageSchema {
   _id?: ObjectId
@@ -164,6 +183,7 @@ export const YEARBOOK_COLLECTIONS = {
   ELEMENTARY: 'Elementary_yearbook',
   ALUMNI: 'Alumni_yearbook',
   FACULTY_STAFF: 'FacultyStaff_yearbook',
+  AR_SISTERS: 'ARSisters_yearbook',
   SCHOOL_YEARS: 'SchoolYears',
   PAGES: 'YearbookPages'
 } as const
@@ -176,6 +196,7 @@ export const DEPARTMENT_TO_COLLECTION = {
   'Elementary': YEARBOOK_COLLECTIONS.ELEMENTARY,
   'Alumni': YEARBOOK_COLLECTIONS.ALUMNI,
   'Faculty & Staff': YEARBOOK_COLLECTIONS.FACULTY_STAFF,
+  'AR Sisters': YEARBOOK_COLLECTIONS.AR_SISTERS,
 } as const
 
 // Validation Schema for Required Fields
@@ -210,6 +231,10 @@ export const YEARBOOK_VALIDATION_SCHEMAS: Record<string, YearbookValidationSchem
     requiredFields: ['schoolYearId', 'schoolYear', 'fullName', 'email', 'department', 'position'],
     optionalFields: ['nickname', 'age', 'gender', 'birthday', 'address', 'phone', 'profilePicture', 'fatherGuardianName', 'motherGuardianName', 'yearLevel', 'courseProgram', 'blockSection', 'yearsOfService', 'office', 'courses', 'additionalRoles', 'sayingMotto', 'dreamJob', 'officerRole', 'bio', 'hobbies', 'honors', 'achievements', 'socialMedia']
   },
+  [YEARBOOK_COLLECTIONS.AR_SISTERS]: {
+    requiredFields: ['schoolYearId', 'schoolYear', 'fullName', 'email', 'department', 'position'],
+    optionalFields: ['nickname', 'age', 'gender', 'birthday', 'address', 'phone', 'profilePicture', 'fatherGuardianName', 'motherGuardianName', 'yearsOfService', 'departmentAssigned', 'vowsDate', 'specialization', 'education', 'additionalRoles', 'messageToStudents', 'publications', 'research', 'classesHandled', 'sayingMotto', 'dreamJob', 'officerRole', 'bio', 'hobbies', 'honors', 'achievements', 'socialMedia', 'customPosition']
+  },
   [YEARBOOK_COLLECTIONS.PAGES]: {
     requiredFields: ['schoolYearId', 'schoolYear', 'pageType', 'pageTitle', 'createdBy'],
     optionalFields: ['pageNumber', 'content', 'department', 'section', 'courseProgram', 'yearLevel', 'blockSection', 'lastModifiedBy', 'isPublished', 'isTemplate']
@@ -224,6 +249,7 @@ export type YearbookEntry =
   | ElementaryYearbookEntry 
   | AlumniYearbookEntry 
   | FacultyStaffYearbookEntry
+  | ARSistersYearbookEntry
 
 // Department type
 export type Department = keyof typeof DEPARTMENT_TO_COLLECTION

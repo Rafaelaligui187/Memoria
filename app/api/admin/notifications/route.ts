@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/mongodb/connection"
+import { adminSessionTracker } from "@/lib/admin-session-tracker"
 
 // GET /api/admin/notifications - Get notifications for admin
 export async function GET(request: NextRequest) {
@@ -8,27 +9,47 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50')
     const unreadOnly = searchParams.get('unreadOnly') === 'true'
     const urgentOnly = searchParams.get('urgentOnly') === 'true'
+    const adminEmail = searchParams.get('adminEmail') // Get admin email from query params
 
     const db = await connectToDatabase()
     const notificationsCollection = db.collection('notifications')
 
-    // Initialize collection with sample data if empty
-    const count = await notificationsCollection.countDocuments()
-    if (count === 0) {
-      const sampleNotification = {
-        id: `notif_${Date.now()}_sample`,
-        type: 'info',
-        title: 'Welcome to Memoria Admin',
-        message: 'Your notification system is now active! You will receive notifications for profile submissions, album likes, and user reports.',
-        timestamp: new Date(),
-        read: false,
-        priority: 'medium',
-        category: 'system',
-        actionUrl: '/admin',
-        actionLabel: 'Go to Admin Dashboard',
-        metadata: { isWelcome: true }
+    // Check if we should show welcome notification for this admin
+    let shouldShowWelcome = false
+    if (adminEmail) {
+      shouldShowWelcome = await adminSessionTracker.shouldShowWelcomeNotification(adminEmail)
+      
+      if (shouldShowWelcome) {
+        // Check if welcome notification already exists
+        const existingWelcome = await notificationsCollection.findOne({ 
+          'metadata.isWelcome': true,
+          'metadata.adminEmail': adminEmail 
+        })
+        
+        if (!existingWelcome) {
+          // Create welcome notification for this admin
+          const welcomeNotification = {
+            id: `notif_${Date.now()}_welcome_${adminEmail.replace('@', '_').replace('.', '_')}`,
+            type: 'info',
+            title: 'Welcome to Memoria Admin',
+            message: 'Your notification system is now active! You will receive notifications for profile submissions, album likes, and user reports.',
+            timestamp: new Date(),
+            read: false,
+            priority: 'medium',
+            category: 'system',
+            actionUrl: '/admin',
+            actionLabel: 'Go to Admin Dashboard',
+            metadata: { 
+              isWelcome: true,
+              adminEmail: adminEmail 
+            }
+          }
+          await notificationsCollection.insertOne(welcomeNotification)
+          
+          // Mark welcome notification as shown for this session
+          await adminSessionTracker.markWelcomeNotificationShown(adminEmail)
+        }
       }
-      await notificationsCollection.insertOne(sampleNotification)
     }
 
     let query = {}
@@ -159,6 +180,9 @@ export async function PATCH(request: NextRequest) {
         updateOperation = { $set: { read: false } }
         break
       case 'delete':
+        // Check if this is a welcome notification being deleted
+        const notificationToDelete = await notificationsCollection.findOne({ id: notificationId })
+        
         const deleteResult = await notificationsCollection.deleteOne({ id: notificationId })
         if (deleteResult.deletedCount === 0) {
           return NextResponse.json({
@@ -166,6 +190,12 @@ export async function PATCH(request: NextRequest) {
             error: 'Notification not found'
           }, { status: 404 })
         }
+        
+        // If it's a welcome notification, mark it as deleted in the session tracker
+        if (notificationToDelete?.metadata?.isWelcome && notificationToDelete?.metadata?.adminEmail) {
+          await adminSessionTracker.markWelcomeNotificationDeleted(notificationToDelete.metadata.adminEmail)
+        }
+        
         return NextResponse.json({
           success: true,
           message: 'Notification deleted'

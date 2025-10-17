@@ -13,11 +13,6 @@ export async function GET() {
     const schoolYears = await schoolYearsCollection.find({}).toArray()
     
     console.log("[Overall Stats] Found school years:", schoolYears.length)
-    console.log("[Overall Stats] School years data:", schoolYears.map(year => ({
-      id: year._id.toString(),
-      label: year.yearLabel,
-      isActive: year.isActive
-    })))
     
     let totalApprovedCount = 0
     let totalPendingCount = 0
@@ -26,82 +21,129 @@ export async function GET() {
     let totalOpenReports = 0
     let schoolYearStats: any[] = []
 
-    // Process each school year
-    for (const schoolYear of schoolYears) {
-      const schoolYearId = schoolYear._id.toString()
+    // Get all school year IDs for batch processing
+    const schoolYearIds = schoolYears.map(year => year._id.toString())
+    
+    // Process all collections in parallel for better performance
+    const collectionsToSearch = Object.values(YEARBOOK_COLLECTIONS).filter(
+      collection => collection !== YEARBOOK_COLLECTIONS.SCHOOL_YEARS && 
+                   collection !== YEARBOOK_COLLECTIONS.PAGES
+    )
+    
+    // Create aggregation pipelines for each collection
+    const aggregationPromises = collectionsToSearch.map(async (collectionName) => {
+      const collection = db.collection(collectionName)
       
-      let yearApprovedCount = 0
-      let yearPendingCount = 0
-      let yearRejectedCount = 0
-      let yearMediaItems = 0
-
-      // Count profiles across all collections for this school year
-      const collectionsToSearch = Object.values(YEARBOOK_COLLECTIONS)
+      // Use aggregation pipeline for better performance
+      const pipeline = [
+        {
+          $match: {
+            schoolYearId: { $in: schoolYearIds }
+          }
+        },
+        {
+          $group: {
+            _id: {
+              schoolYearId: "$schoolYearId",
+              status: "$status"
+            },
+            count: { $sum: 1 },
+            mediaCount: {
+              $sum: {
+                $cond: [
+                  {
+                    $or: [
+                      { $ne: ["$profileImage", null] },
+                      { $gt: [{ $size: { $ifNull: ["$additionalPhotos", []] } }, 0] },
+                      { $gt: [{ $size: { $ifNull: ["$documents", []] } }, 0] }
+                    ]
+                  },
+                  1,
+                  0
+                ]
+              }
+            }
+          }
+        }
+      ]
       
-      for (const collectionName of collectionsToSearch) {
-        const collection = db.collection(collectionName)
-        
-        // Count profiles by status
-        const approvedCount = await collection.countDocuments({
-          schoolYearId: schoolYearId,
-          status: "approved"
-        })
-        
-        const pendingCount = await collection.countDocuments({
-          schoolYearId: schoolYearId,
-          status: "pending"
-        })
-        
-        const rejectedCount = await collection.countDocuments({
-          schoolYearId: schoolYearId,
-          status: "rejected"
-        })
-
-        yearApprovedCount += approvedCount
-        yearPendingCount += pendingCount
-        yearRejectedCount += rejectedCount
-
-        // Count media items (photos, videos, documents)
-        const mediaCount = await collection.countDocuments({
-          schoolYearId: schoolYearId,
-          $or: [
-            { profileImage: { $exists: true, $ne: null } },
-            { additionalPhotos: { $exists: true, $ne: [] } },
-            { documents: { $exists: true, $ne: [] } }
-          ]
-        })
-        yearMediaItems += mediaCount
-      }
-
-      // Get open reports count for this school year
-      try {
-        const reportsCollection = db.collection('reports')
-        const openReportsCount = await reportsCollection.countDocuments({
-          schoolYearId: schoolYearId,
-          status: { $in: ['open', 'pending', 'in_progress'] }
-        })
-        totalOpenReports += openReportsCount
-      } catch (error) {
-        console.log(`Reports collection not found or accessible for year ${schoolYearId}, defaulting to 0`)
-      }
-
-      // Add to totals
-      totalApprovedCount += yearApprovedCount
-      totalPendingCount += yearPendingCount
-      totalRejectedCount += yearRejectedCount
-      totalMediaItems += yearMediaItems
-
-      // Store per-year stats
-      schoolYearStats.push({
-        yearId: schoolYearId,
-        yearLabel: schoolYear.yearLabel,
-        isActive: schoolYear.isActive,
-        approvedCount: yearApprovedCount,
-        pendingCount: yearPendingCount,
-        rejectedCount: yearRejectedCount,
-        mediaItems: yearMediaItems
+      return collection.aggregate(pipeline).toArray()
+    })
+    
+    // Execute all aggregations in parallel
+    const aggregationResults = await Promise.all(aggregationPromises)
+    
+    // Process results and calculate totals
+    const yearStatsMap = new Map()
+    
+    // Initialize year stats
+    schoolYears.forEach(year => {
+      const yearId = year._id.toString()
+      yearStatsMap.set(yearId, {
+        yearId,
+        yearLabel: year.yearLabel,
+        isActive: year.isActive,
+        approvedCount: 0,
+        pendingCount: 0,
+        rejectedCount: 0,
+        mediaItems: 0
       })
+    })
+    
+    // Aggregate results from all collections
+    aggregationResults.forEach((results, collectionIndex) => {
+      results.forEach(result => {
+        const { schoolYearId, status } = result._id
+        const count = result.count
+        const mediaCount = result.mediaCount
+        
+        const yearStats = yearStatsMap.get(schoolYearId)
+        if (yearStats) {
+          if (status === 'approved') {
+            yearStats.approvedCount += count
+            totalApprovedCount += count
+          } else if (status === 'pending') {
+            yearStats.pendingCount += count
+            totalPendingCount += count
+          } else if (status === 'rejected') {
+            yearStats.rejectedCount += count
+            totalRejectedCount += count
+          }
+          
+          yearStats.mediaItems += mediaCount
+          totalMediaItems += mediaCount
+        }
+      })
+    })
+    
+    // Get open reports count in parallel
+    try {
+      const reportsCollection = db.collection('reports')
+      const openReportsPipeline = [
+        {
+          $match: {
+            schoolYearId: { $in: schoolYearIds },
+            status: { $in: ['open', 'pending', 'in_progress'] }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalOpenReports: { $sum: 1 }
+          }
+        }
+      ]
+      
+      const reportsResult = await reportsCollection.aggregate(openReportsPipeline).toArray()
+      totalOpenReports = reportsResult[0]?.totalOpenReports || 0
+    } catch (error) {
+      console.log(`Reports collection not found or accessible, defaulting to 0`)
     }
+    
+    // Convert map to array and sort
+    schoolYearStats = Array.from(yearStatsMap.values()).sort((a, b) => {
+      return b.yearLabel.localeCompare(a.yearLabel)
+    })
 
     console.log("[Overall Stats] Statistics calculated:", {
       totalApprovedCount,
@@ -121,10 +163,7 @@ export async function GET() {
         totalMediaItems,
         totalOpenReports,
         totalSchoolYears: schoolYears.length,
-        schoolYearStats: schoolYearStats.sort((a, b) => {
-          // Sort by year label descending (newest first)
-          return b.yearLabel.localeCompare(a.yearLabel)
-        })
+        schoolYearStats
       }
     })
 

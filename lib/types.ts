@@ -1,6 +1,6 @@
 // Base types
 export type ProfileStatus = "draft" | "pending" | "approved" | "rejected" | "archived"
-export type UserRole = "student" | "faculty" | "alumni" | "staff" | "utility" | "admin"
+export type UserRole = "student" | "faculty" | "alumni" | "staff" | "utility" | "admin" | "advisory"
 export type AlbumPrivacy = "public" | "private" | "hidden"
 export type ModerationAction = "approve" | "reject"
 export type NotificationType = "approval" | "rejection" | "general" | "report"
@@ -100,6 +100,33 @@ export interface AlumniProfile extends BaseProfile {
   messageToStudents?: string
   achievements: Achievement[]
   galleryImages: ImageMetadata[]
+}
+
+// Advisory Profile
+export interface AdvisoryProfile extends BaseProfile {
+  position: string // e.g., "Teacher Adviser", "Class Adviser"
+  departmentAssigned: string
+  customDepartmentAssigned?: string
+  yearsOfService?: number
+  courses?: string
+  additionalRoles?: string
+  messageToStudents?: string
+  bio?: string
+  
+  // Academic Information
+  academicDepartment: string
+  academicYearLevels: string[]
+  academicCourseProgram: string
+  academicSections: string[]
+  
+  // Social Media
+  socialMediaFacebook?: string
+  socialMediaInstagram?: string
+  socialMediaTwitter?: string
+  
+  // Yearbook Information
+  sayingMotto?: string
+  achievements: Achievement[]
 }
 
 // Staff Profile (no messageToStudents field as requested)

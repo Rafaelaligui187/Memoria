@@ -86,6 +86,19 @@ export async function GET(request: NextRequest) {
     // Execute query
     const data = await collection.find(filters).toArray()
     console.log(`✅ Query executed - found ${data.length} results`)
+    
+    // Debug: Log all profiles with their yearLevel to understand the data format
+    if (yearLevel) {
+      const allProfiles = await collection.find({ schoolYearId }).toArray()
+      console.log(`🔍 Debug: All profiles in collection:`, allProfiles.map(p => ({
+        name: p.fullName,
+        yearLevel: p.yearLevel,
+        academicYearLevels: p.academicYearLevels,
+        isAdvisoryEntry: p.isAdvisoryEntry,
+        userType: p.userType
+      })))
+      console.log(`🔍 Debug: Looking for yearLevel: "${yearLevel}"`)
+    }
 
     // Transform data
     const transformedData = data.map((row) => ({

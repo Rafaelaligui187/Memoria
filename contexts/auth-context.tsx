@@ -100,6 +100,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("auth_token", "admin_token")
       localStorage.setItem("memoria_user", JSON.stringify(userData))
 
+      // Track admin login session
+      try {
+        const response = await fetch('/api/admin/track-login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ adminEmail: email }),
+        })
+        
+        if (response.ok) {
+          console.log('✅ Admin login session tracked')
+        }
+      } catch (error) {
+        console.error('❌ Error tracking admin login:', error)
+        // Don't fail login if session tracking fails
+      }
+
       setUser(userData)
       return true
     }
@@ -115,6 +133,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
+    // Track admin logout before clearing session
+    if (user?.isAdmin && user?.email) {
+      fetch('/api/admin/track-logout', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ adminEmail: user.email }),
+      }).catch(error => {
+        console.error('❌ Error tracking admin logout:', error)
+        // Don't fail logout if session tracking fails
+      })
+    }
+
     localStorage.removeItem("auth_token")
     localStorage.removeItem("memoria_user")
     document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"

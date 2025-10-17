@@ -26,6 +26,8 @@ export function MessageAdminDialog({ open, onOpenChange }: MessageAdminDialogPro
   const [category, setCategory] = useState("")
   const [message, setMessage] = useState("")
   const [attachments, setAttachments] = useState<File[]>([])
+  const [attachmentUrls, setAttachmentUrls] = useState<string[]>([])
+  const [uploadingFiles, setUploadingFiles] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async () => {
@@ -52,13 +54,15 @@ export function MessageAdminDialog({ open, onOpenChange }: MessageAdminDialogPro
       // Get current school year ID (you might need to adjust this based on your app's structure)
       const schoolYearId = "current" // This should be dynamically determined
       
+      const userId = user.schoolId || user.id || user.email
+      
       const response = await fetch('/api/reports', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          userId: user.id || user.email,
+          userId: userId,
           userName: user.name || 'Anonymous User',
           userEmail: user.email,
           category: category,
@@ -66,7 +70,12 @@ export function MessageAdminDialog({ open, onOpenChange }: MessageAdminDialogPro
           description: message,
           priority: 'medium',
           schoolYearId: schoolYearId,
-          attachments: [], // For now, we'll handle file uploads separately if needed
+          attachments: attachmentUrls.map((url, index) => ({
+            url,
+            filename: attachments[index]?.name || `attachment_${index + 1}`,
+            size: attachments[index]?.size || 0,
+            type: attachments[index]?.type || 'unknown'
+          })),
         }),
       })
 
@@ -85,12 +94,14 @@ export function MessageAdminDialog({ open, onOpenChange }: MessageAdminDialogPro
         setCategory("")
         setMessage("")
         setAttachments([])
+        setAttachmentUrls([])
         
         // Refresh the message history
         window.dispatchEvent(new CustomEvent('refreshUserMessages'))
         
         // Dispatch event to update notifications
         window.dispatchEvent(new CustomEvent('userReportSubmitted'))
+        window.dispatchEvent(new CustomEvent('messageStatusChanged'))
       } else {
         toast({
           title: "Error",
@@ -110,8 +121,98 @@ export function MessageAdminDialog({ open, onOpenChange }: MessageAdminDialogPro
     }
   }
 
+  const handleFileUpload = async (files: FileList | null) => {
+    if (!files) return
+
+    const fileArray = Array.from(files)
+    
+    // Validate file count
+    if (attachments.length + fileArray.length > 5) {
+      toast({
+        title: "Too many files",
+        description: "You can only attach up to 5 files.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Validate each file
+    for (const file of fileArray) {
+      // Check file type
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf']
+      if (!allowedTypes.includes(file.type)) {
+        toast({
+          title: "Invalid file type",
+          description: `${file.name} is not a supported file type. Please use PNG, JPG, or PDF files.`,
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Check file size (10MB max)
+      if (file.size > 10 * 1024 * 1024) {
+        toast({
+          title: "File too large",
+          description: `${file.name} is too large. Maximum file size is 10MB.`,
+          variant: "destructive",
+        })
+        return
+      }
+    }
+
+    setUploadingFiles(true)
+    try {
+      const uploadPromises = fileArray.map(async (file) => {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('name', file.name)
+
+        const response = await fetch('/api/message-attachments/upload', {
+          method: 'POST',
+          body: formData,
+        })
+
+        const result = await response.json()
+        
+        if (result.success) {
+          return {
+            file,
+            url: result.url,
+            filename: result.filename
+          }
+        } else {
+          throw new Error(result.error || 'Upload failed')
+        }
+      })
+
+      const uploadResults = await Promise.all(uploadPromises)
+      
+      // Add files to attachments
+      setAttachments(prev => [...prev, ...fileArray])
+      
+      // Add URLs to attachmentUrls
+      setAttachmentUrls(prev => [...prev, ...uploadResults.map(r => r.url)])
+
+      toast({
+        title: "Files uploaded successfully",
+        description: `${fileArray.length} file(s) attached to your message.`,
+      })
+
+    } catch (error) {
+      console.error('Error uploading files:', error)
+      toast({
+        title: "Upload failed",
+        description: "Failed to upload files. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setUploadingFiles(false)
+    }
+  }
+
   const removeAttachment = (index: number) => {
     setAttachments(attachments.filter((_, i) => i !== index))
+    setAttachmentUrls(attachmentUrls.filter((_, i) => i !== index))
   }
 
   const categoryOptions = [
@@ -204,10 +305,24 @@ export function MessageAdminDialog({ open, onOpenChange }: MessageAdminDialogPro
                     <p className="text-sm text-muted-foreground mb-2">
                       Attach screenshots or files to help explain your issue
                     </p>
-                    <Button variant="outline" size="sm" className="mb-2 bg-transparent">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="mb-2 bg-transparent"
+                      onClick={() => document.getElementById('file-upload')?.click()}
+                      disabled={uploadingFiles || attachments.length >= 5}
+                    >
                       <Paperclip className="mr-2 h-4 w-4" />
-                      Choose Files
+                      {uploadingFiles ? "Uploading..." : "Choose Files"}
                     </Button>
+                    <input
+                      id="file-upload"
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/jpg,application/pdf"
+                      onChange={(e) => handleFileUpload(e.target.files)}
+                      className="hidden"
+                    />
                     <p className="text-xs text-muted-foreground">PNG, JPG, PDF up to 10MB each (max 5 files)</p>
                   </div>
 
@@ -249,7 +364,7 @@ export function MessageAdminDialog({ open, onOpenChange }: MessageAdminDialogPro
             </Button>
             <Button
               onClick={handleSubmit}
-              disabled={!subject || !message || !category || loading}
+              disabled={!subject || !message || !category || loading || uploadingFiles}
               className="px-6 bg-primary hover:bg-primary/90"
             >
               <Send className="mr-2 h-4 w-4" />

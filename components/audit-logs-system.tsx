@@ -44,6 +44,7 @@ export function AuditLogsSystem({ selectedYear, selectedYearLabel }: AuditLogSys
   const [dateRange, setDateRange] = useState({ from: "", to: "" })
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
+  const [deleteAllConfirm, setDeleteAllConfirm] = useState(false)
 
   const actionTypes = [
     "profile_approved",
@@ -117,6 +118,47 @@ export function AuditLogsSystem({ selectedYear, selectedYearLabel }: AuditLogSys
       toast({
         title: "Error",
         description: "Failed to delete audit log. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Delete all audit logs function
+  const handleDeleteAllAuditLogs = async () => {
+    try {
+      console.log('[Audit Logs] Deleting all audit logs...')
+      
+      const response = await fetch('/api/admin/audit-logs/delete-all', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        // Clear all logs from local state
+        setLogs([])
+        setFilteredLogs([])
+        setDeleteAllConfirm(false)
+        
+        toast({
+          title: "Success",
+          description: `All ${result.deletedCount} audit logs have been deleted successfully.`,
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: result.error || "Failed to delete all audit logs",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error deleting all audit logs:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete all audit logs. Please try again.",
         variant: "destructive",
       })
     }
@@ -419,6 +461,14 @@ export function AuditLogsSystem({ selectedYear, selectedYearLabel }: AuditLogSys
                 <Download className="h-4 w-4 mr-2" />
                 Export CSV
               </Button>
+              <Button 
+                variant="destructive" 
+                onClick={() => setDeleteAllConfirm(true)}
+                disabled={logs.length === 0}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete All
+              </Button>
             </div>
             <Badge variant="secondary">
               {filteredLogs.length} of {logs.length} logs
@@ -590,6 +640,39 @@ export function AuditLogsSystem({ selectedYear, selectedYearLabel }: AuditLogSys
                   onClick={() => handleDeleteAuditLog(deleteConfirmId)}
                 >
                   Delete
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </Card>
+      )}
+
+      {/* Delete All Confirmation Dialog */}
+      {deleteAllConfirm && (
+        <Card className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <Card className="w-96">
+            <CardHeader>
+              <CardTitle className="text-red-600">Delete All Audit Logs</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Are you sure you want to delete ALL audit logs? This will permanently remove {logs.length} audit logs and cannot be undone.
+              </p>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-sm text-red-800 font-medium">⚠️ Warning: This action cannot be undone!</p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setDeleteAllConfirm(false)}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  variant="destructive" 
+                  onClick={handleDeleteAllAuditLogs}
+                >
+                  Delete All ({logs.length})
                 </Button>
               </div>
             </CardContent>

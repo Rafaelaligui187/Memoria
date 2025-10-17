@@ -8,6 +8,7 @@ import {
   connectToDatabase 
 } from "@/lib/gallery-database"
 import { createAuditLog, getClientInfo } from "@/lib/audit-log-utils"
+import { adminNotificationService } from "@/lib/admin-notification-service"
 
 // GET /api/gallery/albums - Get all albums
 export async function GET(request: NextRequest) {
@@ -102,6 +103,20 @@ export async function POST(request: NextRequest) {
     } catch (auditError) {
       console.error('[Album API] Failed to create audit log:', auditError)
       // Don't fail the album creation if audit logging fails
+    }
+
+    // Create notification for all users about new album
+    try {
+      await adminNotificationService.notifyNewAlbum({
+        title: album.title,
+        category: album.category,
+        description: album.description,
+        yearId: album.yearId
+      })
+      console.log('[Album API] Notification created for new album')
+    } catch (notificationError) {
+      console.error('[Album API] Failed to create notification:', notificationError)
+      // Don't fail the album creation if notification fails
     }
     
     return NextResponse.json({

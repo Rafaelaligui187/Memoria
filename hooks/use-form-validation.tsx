@@ -32,14 +32,15 @@ export const useFormValidation = ({
     setFormData(prev => ({ ...prev, [fieldName]: value }))
     
     // Clear error for this field when user starts typing
-    if (errors[fieldName]) {
-      setErrors(prev => {
+    setErrors(prev => {
+      if (prev[fieldName]) {
         const newErrors = { ...prev }
         delete newErrors[fieldName]
         return newErrors
-      })
-    }
-  }, [errors])
+      }
+      return prev
+    })
+  }, [])
 
   const validateFieldOnBlur = useCallback((fieldName: string) => {
     const roleRules = getRoleSpecificValidationRules(selectedRole)

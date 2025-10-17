@@ -39,6 +39,7 @@ import {
   uploadMultipleImagesToGallery,
   createAlbum,
   addMediaToAlbum,
+  updateAlbum,
   type AlbumData,
   type MediaItem,
   type GalleryUploadResult
@@ -303,6 +304,13 @@ export function CreateAlbumForm({ open, onOpenChange, selectedYear, onAlbumCreat
 
         await addMediaToAlbum(albumData.id, mediaItems)
         albumData.mediaCount = mediaItems.length
+        
+        // Set the first uploaded image as the cover image
+        if (mediaItems.length > 0) {
+          const firstImageUrl = mediaItems[0].url
+          await updateAlbum(albumData.id, { coverImage: firstImageUrl })
+          albumData.coverImage = firstImageUrl
+        }
       }
 
       onAlbumCreated(albumData)

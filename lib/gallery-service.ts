@@ -300,6 +300,49 @@ export async function updateAlbum(id: string, updates: Partial<AlbumData>): Prom
   }
 }
 
+export async function deleteAlbum(id: string): Promise<boolean> {
+  try {
+    console.log('[Gallery Service] Deleting album:', id)
+    console.log('[Gallery Service] Making DELETE request to:', `/api/gallery/albums/${id}`)
+    
+    const response = await fetch(`/api/gallery/albums/${id}`, {
+      method: 'DELETE',
+    })
+
+    console.log('[Gallery Service] Response status:', response.status)
+    console.log('[Gallery Service] Response ok:', response.ok)
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[Gallery Service] Error response:', errorText)
+      
+      let errorMessage = 'Failed to delete album'
+      try {
+        const errorData = JSON.parse(errorText)
+        errorMessage = errorData.error || errorMessage
+      } catch (parseError) {
+        console.error('[Gallery Service] Could not parse error response:', parseError)
+        errorMessage = `Server error (${response.status}): ${errorText}`
+      }
+      
+      throw new Error(errorMessage)
+    }
+
+    const result = await response.json()
+    console.log('[Gallery Service] Delete response:', result)
+    
+    if (result.success) {
+      console.log('[Gallery Service] Album deleted successfully')
+      return true
+    } else {
+      throw new Error(result.error || 'Delete operation failed')
+    }
+  } catch (error) {
+    console.error('[Gallery Service] Error deleting album:', error)
+    throw error
+  }
+}
+
 export async function getAlbumReports(albumId: string, schoolYearId?: string): Promise<any[]> {
   try {
     const params = new URLSearchParams()
@@ -419,5 +462,58 @@ export async function updateMediaStatus(id: string, status: 'approved' | 'pendin
   } catch (error) {
     console.error('Error updating media status:', error)
     return false
+  }
+}
+
+export async function fixAlbumCoverImages(): Promise<{ fixed: number; total: number }> {
+  try {
+    console.log('[Gallery Service] Starting to fix album cover images...')
+    
+    // Use the API endpoint to get albums (this ensures we're using the correct database)
+    const response = await fetch('/api/gallery/albums')
+    if (!response.ok) {
+      throw new Error('Failed to fetch albums')
+    }
+    
+    const result = await response.json()
+    const albums = result.data
+    console.log(`[Gallery Service] Found ${albums.length} albums`)
+    
+    let fixedCount = 0
+    
+    for (const album of albums) {
+      // Skip if album already has a cover image
+      if (album.coverImage) {
+        console.log(`[Gallery Service] Album "${album.title}" already has cover image`)
+        continue
+      }
+      
+      // Get media items for this album using API
+      const mediaResponse = await fetch(`/api/gallery/media?albumId=${album.id}`)
+      if (!mediaResponse.ok) {
+        console.log(`[Gallery Service] Failed to get media for album "${album.title}"`)
+        continue
+      }
+      
+      const mediaResult = await mediaResponse.json()
+      const mediaItems = mediaResult.data
+      console.log(`[Gallery Service] Album "${album.title}" has ${mediaItems.length} media items`)
+      
+      if (mediaItems.length > 0) {
+        // Set the first image as cover image
+        const firstImageUrl = mediaItems[0].url
+        await updateAlbum(album.id, { coverImage: firstImageUrl })
+        console.log(`[Gallery Service] ✅ Set cover image for album "${album.title}"`)
+        fixedCount++
+      } else {
+        console.log(`[Gallery Service] ⚠️ Album "${album.title}" has no media items`)
+      }
+    }
+    
+    console.log(`[Gallery Service] Fixed ${fixedCount} out of ${albums.length} albums`)
+    return { fixed: fixedCount, total: albums.length }
+  } catch (error) {
+    console.error('[Gallery Service] Error fixing album cover images:', error)
+    throw error
   }
 }

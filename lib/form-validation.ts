@@ -187,6 +187,43 @@ export const commonValidationRules: ValidationRules = {
   currentLocation: {
     maxLength: 100,
     message: "Location must be less than 100 characters"
+  },
+  // Advisory-specific fields
+  academicDepartment: {
+    required: true,
+    message: "Academic department is required"
+  },
+  academicYearLevels: {
+    required: true,
+    custom: (value: string) => {
+      try {
+        const levels = JSON.parse(value)
+        if (!Array.isArray(levels) || levels.length === 0) {
+          return "Please select at least one academic year level"
+        }
+        return null
+      } catch {
+        return "Please select at least one academic year level"
+      }
+    }
+  },
+  academicCourseProgram: {
+    required: true,
+    message: "Academic course/program is required"
+  },
+  academicSections: {
+    required: true,
+    custom: (value: string) => {
+      try {
+        const sections = JSON.parse(value)
+        if (!Array.isArray(sections) || sections.length === 0) {
+          return "Please select at least one academic section"
+        }
+        return null
+      } catch {
+        return "Please select at least one academic section"
+      }
+    }
   }
 }
 
@@ -275,10 +312,14 @@ export const getRoleSpecificValidationRules = (selectedRole: string): Validation
       'position', 'departmentAssigned', 'yearsOfService', 'messageToStudents'
     ],
     staff: [
-      'position', 'officeAssigned', 'yearsOfService'
+      'position', 'officeAssigned', 'yearsOfService', 'messageToStudents'
     ],
     utility: [
-      'position', 'officeAssigned', 'yearsOfService'
+      'position', 'officeAssigned', 'yearsOfService', 'messageToStudents'
+    ],
+    advisory: [
+      'position', 'departmentAssigned', 'yearsOfService', 'messageToStudents',
+      'academicDepartment', 'academicYearLevels', 'academicCourseProgram', 'academicSections'
     ],
     alumni: [
       'department', 'courseProgram', 'graduationYear', 'currentProfession'
@@ -327,6 +368,18 @@ export const getConditionalValidationRules = (
     }
   }
 
+  // Advisory-specific conditional rules
+  if (selectedRole === "advisory") {
+    if (formData.departmentAssigned === "Others") {
+      rules.customDepartmentAssigned = {
+        required: true,
+        minLength: 2,
+        maxLength: 100,
+        message: "Please enter the correct department assigned"
+      }
+    }
+  }
+
   // Staff/Utility-specific conditional rules
   if (selectedRole === "staff" || selectedRole === "utility") {
     if (formData.officeAssigned === "Others") {
@@ -335,6 +388,15 @@ export const getConditionalValidationRules = (
         minLength: 2,
         maxLength: 100,
         message: "Please enter the correct office assigned"
+      }
+    }
+    
+    // Make messageToStudents optional for staff and utility (required only for faculty)
+    if (rules.messageToStudents) {
+      rules.messageToStudents = {
+        ...rules.messageToStudents,
+        required: false,
+        message: "Message to students must be 10-500 characters if provided"
       }
     }
   }

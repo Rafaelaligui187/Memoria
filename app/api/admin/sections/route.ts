@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { MongoClient, ObjectId } from "mongodb"
+import { adminNotificationService } from "@/lib/admin-notification-service"
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://aliguirafael:group8@cluster0.ofoka.mongodb.net/Memoria'
 
@@ -175,6 +176,19 @@ export async function POST(request: NextRequest) {
     const result = await collection.insertOne(sectionData)
     
     console.log('[Sections API] Created section:', { _id: result.insertedId, ...sectionData })
+    
+    // Create notification for all users about new section
+    try {
+      await adminNotificationService.notifyNewSection({
+        name: sectionData.name,
+        department: sectionData.department,
+        schoolYear: sectionData.schoolYear
+      })
+      console.log('[Sections API] Notification created for new section')
+    } catch (notificationError) {
+      console.error('[Sections API] Failed to create notification:', notificationError)
+      // Don't fail the section creation if notification fails
+    }
     
     return NextResponse.json({
       success: true,

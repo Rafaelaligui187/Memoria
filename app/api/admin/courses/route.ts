@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { MongoClient, ObjectId } from 'mongodb'
+import { adminNotificationService } from "@/lib/admin-notification-service"
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://aliguirafael:group8@cluster0.ofoka.mongodb.net/Memoria?retryWrites=true&w=majority"
 
@@ -147,6 +148,20 @@ export async function POST(request: NextRequest) {
     const result = await collection.insertOne(course)
     
     console.log('Course inserted successfully:', result.insertedId)
+    
+    // Create notification for all users about new course
+    try {
+      await adminNotificationService.notifyNewCourse({
+        name: course.name,
+        fullName: course.fullName,
+        department: course.department,
+        schoolYear: course.schoolYear
+      })
+      console.log('[Courses API] Notification created for new course')
+    } catch (notificationError) {
+      console.error('[Courses API] Failed to create notification:', notificationError)
+      // Don't fail the course creation if notification fails
+    }
     
     return NextResponse.json({
       success: true,

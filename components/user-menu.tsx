@@ -15,6 +15,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { ProfileManagementDialog } from "./profile-management-dialog"
 import { CustomizeDialog } from "./customize-dialog"
 import { MessageAdminDialog } from "./message-admin-dialog"
+import { UserNotificationBell } from "./user-notification-bell"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,34 +44,39 @@ export function UserMenu() {
 
   return (
     <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            className="flex items-center gap-3 rounded-full bg-card px-4 py-2 hover:bg-muted transition-colors shadow-sm border"
-          >
-            {user.profilePhoto ? (
-              <Image
-                src={user.profilePhoto}
-                alt="Profile"
-                width={32}
-                height={32}
-                className="rounded-full object-cover"
-              />
-            ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/80 text-sm font-bold text-primary-foreground shadow-sm">
-                {user.initials ?? "U"}
+      <div className="flex items-center gap-2">
+        {/* Notification Bell */}
+        <UserNotificationBell />
+        
+        {/* User Menu */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              className="flex items-center gap-3 rounded-full bg-card px-4 py-2 hover:bg-muted transition-colors shadow-sm border"
+            >
+              {user.profilePhoto ? (
+                <Image
+                  src={user.profilePhoto}
+                  alt="Profile"
+                  width={32}
+                  height={32}
+                  className="rounded-full object-cover"
+                />
+              ) : (
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary/80 text-sm font-bold text-primary-foreground shadow-sm">
+                  {user.initials ?? "U"}
+                </div>
+              )}
+              <div className="hidden text-left sm:block">
+                <p className="text-sm font-semibold text-foreground">{user.name ?? user.firstName ?? "User"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {user.schoolId ? `ID: ${user.schoolId}` : "Yearbook Member"}
+                </p>
               </div>
-            )}
-            <div className="hidden text-left sm:block">
-              <p className="text-sm font-semibold text-foreground">{user.name ?? user.firstName ?? "User"}</p>
-              <p className="text-xs text-muted-foreground">
-                {user.schoolId ? `ID: ${user.schoolId}` : "Yearbook Member"}
-              </p>
-            </div>
-            <ChevronDown className="h-4 w-4 text-muted-foreground" />
-          </Button>
-        </DropdownMenuTrigger>
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
 
         <DropdownMenuContent align="end" className="w-64 p-2">
           <DropdownMenuLabel className="font-normal px-2 py-3">
@@ -156,7 +162,8 @@ export function UserMenu() {
             <span className="font-medium">Sign Out</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
-      </DropdownMenu>
+        </DropdownMenu>
+      </div>
 
       <ProfileManagementDialog open={showProfileManagement} onOpenChange={setShowProfileManagement} />
       <CustomizeDialog open={showCustomize} onOpenChange={setShowCustomize} />

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/mongodb/connection"
 import { ObjectId } from "mongodb"
 import { createAuditLog, getClientInfo } from "@/lib/audit-log-utils"
+import { adminNotificationService } from "@/lib/admin-notification-service"
 
 // PUT /api/reports/[id] - Update report status and admin reply
 export async function PUT(
@@ -86,6 +87,37 @@ export async function PUT(
     } catch (auditError) {
       console.error('[Reports API] Failed to create audit log for update:', auditError)
       // Don't fail the report update if audit logging fails
+    }
+
+    // Create notifications for user about status changes
+    try {
+      if (status === 'in_progress' && updatedReport) {
+        await adminNotificationService.notifyMessageInProgress(updatedReport.userId, {
+          subject: updatedReport.subject || "Your Message",
+          reportId: params.id
+        })
+        console.log('[Reports API] Notification created for message in progress')
+      }
+      
+      if (adminReply && updatedReport) {
+        await adminNotificationService.notifyMessageReply(updatedReport.userId, {
+          subject: updatedReport.subject || "Your Message",
+          adminReply: adminReply,
+          reportId: params.id
+        })
+        console.log('[Reports API] Notification created for admin reply')
+      } else if (status === 'resolved' && updatedReport && !adminReply) {
+        // Only send resolution notification if there's no admin reply
+        // (if there's a reply, the reply notification is more important)
+        await adminNotificationService.notifyMessageResolved(updatedReport.userId, {
+          subject: updatedReport.subject || "Your Message",
+          reportId: params.id
+        })
+        console.log('[Reports API] Notification created for message resolution')
+      }
+    } catch (notificationError) {
+      console.error('[Reports API] Failed to create notification:', notificationError)
+      // Don't fail the report update if notification fails
     }
 
     return NextResponse.json({

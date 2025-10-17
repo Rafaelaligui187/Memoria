@@ -65,7 +65,6 @@ export function FacultyProfileSetupForm({
     departmentAssigned: "",
     yearsOfService: "",
     messageToStudents: "",
-    isARSister: false,
 
     // Additional Info
     courses: "",
@@ -93,7 +92,7 @@ export function FacultyProfileSetupForm({
     setAchievements(prev => prev.filter((_, i) => i !== index))
   }
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: string | string[]) => {
     setFormData(prev => ({ ...prev, [field]: value }))
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: "" }))
@@ -406,8 +405,8 @@ export function FacultyProfileSetupForm({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Department Head">Department Head</SelectItem>
-                  <SelectItem value="School Directress">School Directress</SelectItem>
-                  <SelectItem value="Teacher">Teacher</SelectItem>
+                  <SelectItem value="Subject Teacher">Subject Teacher</SelectItem>
+                  <SelectItem value="Teacher Adviser">Teacher Adviser</SelectItem>
                 </SelectContent>
               </Select>
               {errors.position && <p className="text-sm text-red-500">{errors.position}</p>}
@@ -420,9 +419,7 @@ export function FacultyProfileSetupForm({
                 </SelectTrigger>
                 <SelectContent>
                   {/* Dynamic department options based on position */}
-                  {formData.position === "School Directress" ? (
-                    <SelectItem value="School Dean">School Dean</SelectItem>
-                  ) : (formData.position === "Department Head" || formData.position === "Teacher") ? (
+                  {(formData.position === "Department Head" || formData.position === "Teacher") ? (
                     <>
                       <SelectItem value="College of Computer Studies">College of Computer Studies</SelectItem>
                       <SelectItem value="College of Hospitality Management">College of Hospitality Management</SelectItem>
@@ -459,23 +456,6 @@ export function FacultyProfileSetupForm({
               {errors.yearsOfService && <p className="text-sm text-red-500">{errors.yearsOfService}</p>}
             </div>
             
-            <div className="space-y-2">
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="isARSister"
-                  checked={formData.isARSister}
-                  onChange={(e) => handleInputChange("isARSister", e.target.checked.toString())}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                />
-                <Label htmlFor="isARSister" className="text-sm font-medium">
-                  AR Sister (A.R.)
-                </Label>
-              </div>
-              <p className="text-xs text-gray-500">
-                Check this if you are an AR Sister (A.R.)
-              </p>
-            </div>
             <div className="space-y-2">
               <Label htmlFor="courses">Courses Taught</Label>
               <Textarea

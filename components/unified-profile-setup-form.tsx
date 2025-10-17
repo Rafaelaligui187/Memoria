@@ -30,6 +30,7 @@ import {
 import { toast } from "@/hooks/use-toast"
 import Image from "next/image"
 import { uploadProfileImage, validateImageFile, getImagePreviewUrl } from "@/lib/image-upload-utils"
+import { AdvisoryForm } from "@/components/advisory-form"
 import { useFormValidation } from "@/hooks/use-form-validation"
 import { commonValidationRules } from "@/lib/form-validation"
 import { FormField } from "@/components/form-field"
@@ -39,11 +40,12 @@ interface UnifiedProfileSetupFormProps {
   schoolYearId: string
   userId: string
   isEditing?: boolean
+  isAdminEdit?: boolean
   onBack: () => void
   onSave: () => void
 }
 
-type UserRole = "student" | "alumni" | "faculty" | "staff" | "utility"
+type UserRole = "student" | "alumni" | "faculty" | "staff" | "utility" | "ar-sisters" | "advisory"
 
 // Dynamic academic data structure
 const departmentData = {
@@ -95,6 +97,7 @@ export function UnifiedProfileSetupForm({
   schoolYearId,
   userId,
   isEditing = false,
+  isAdminEdit = false,
   onBack,
   onSave,
 }: UnifiedProfileSetupFormProps) {
@@ -104,6 +107,11 @@ export function UnifiedProfileSetupForm({
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null)
   const [departmentData, setDepartmentData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  
+  // Academic Information state for faculty
+  const [availableAcademicYearLevels, setAvailableAcademicYearLevels] = useState<string[]>([])
+  const [availableAcademicPrograms, setAvailableAcademicPrograms] = useState<string[]>([])
+  const [availableAcademicSections, setAvailableAcademicSections] = useState<{name: string, yearLevel: string}[]>([])
 
   const initialFormData = {
     // Basic Info (all roles)
@@ -139,7 +147,17 @@ export function UnifiedProfileSetupForm({
     customDepartmentAssigned: "",
     yearsOfService: "",
     messageToStudents: "",
-    isARSister: false,
+    
+    // Faculty Academic Information (optional for advisory roles)
+    academicDepartment: "",
+    academicYearLevels: "[]",
+    academicCourseProgram: "",
+    academicSections: "[]",
+
+    // AR Sisters specific fields
+    customPosition: "",
+    education: "",
+    additionalRoles: "",
 
     // Staff fields (includes maintenance)
     officeAssigned: "",
@@ -376,6 +394,107 @@ export function UnifiedProfileSetupForm({
     }
   }, [schoolYearId])
 
+  // Academic Information dynamic dropdown logic for faculty
+  useEffect(() => {
+    if (departmentData && formData.academicDepartment && departmentData[formData.academicDepartment]) {
+      const deptData = departmentData[formData.academicDepartment]
+      setAvailableAcademicYearLevels(deptData.yearLevels || [])
+      setAvailableAcademicPrograms(deptData.programs || [])
+      
+      // Reset dependent fields when department changes
+      updateField("academicYearLevels", "[]")
+      updateField("academicCourseProgram", "")
+      updateField("academicSections", "[]")
+      setAvailableAcademicSections([]) // Clear sections initially
+    }
+  }, [formData.academicDepartment, departmentData, updateField])
+
+  // Fetch filtered academic sections when course/program and year levels are selected
+  useEffect(() => {
+    const fetchFilteredAcademicSections = async () => {
+      // Parse the JSON strings to arrays
+      const yearLevels = (() => {
+        try {
+          return JSON.parse(formData.academicYearLevels || "[]")
+        } catch {
+          return []
+        }
+      })()
+      
+      if (formData.academicDepartment && formData.academicCourseProgram && yearLevels.length > 0) {
+        try {
+          // Make multiple API calls for each selected year level
+          const sectionPromises = yearLevels.map(async (yearLevel: string) => {
+            const params = new URLSearchParams({
+              schoolYearId: schoolYearId,
+              department: formData.academicDepartment,
+              program: formData.academicCourseProgram,
+              yearLevel: yearLevel
+            })
+            
+            const response = await fetch(`/api/admin/form-data?${params}`)
+            const result = await response.json()
+            
+            if (result.success) {
+              // Return sections with their year level information
+              return (result.data.sections || []).map((section: string) => ({
+                name: section,
+                yearLevel: yearLevel
+              }))
+            }
+            return []
+          })
+          
+          // Wait for all API calls to complete
+          const sectionResults = await Promise.all(sectionPromises)
+          
+          // Combine sections from all year levels
+          const allSections = sectionResults.flat()
+          
+          setAvailableAcademicSections(allSections)
+          console.log(`Filtered academic sections for ${formData.academicDepartment} - ${formData.academicCourseProgram} - ${yearLevels}:`, allSections)
+          
+          // Reset academic sections if current selections are not available
+          const currentSections = (() => {
+            try {
+              return JSON.parse(formData.academicSections || "[]")
+            } catch {
+              return []
+            }
+          })()
+          
+          if (currentSections.length > 0) {
+            const availableSectionKeys = allSections.map(s => `${s.name}-${s.yearLevel}`)
+            const validSections = currentSections.filter((section: string) => 
+              availableSectionKeys.includes(section)
+            )
+            if (validSections.length !== currentSections.length) {
+              updateField("academicSections", JSON.stringify(validSections))
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching filtered academic sections:', error)
+        }
+      } else {
+        // If not all required fields are selected, clear sections
+        setAvailableAcademicSections([])
+        const currentSections = (() => {
+          try {
+            return JSON.parse(formData.academicSections || "[]")
+          } catch {
+            return []
+          }
+        })()
+        
+        if (currentSections.length > 0) {
+          updateField("academicSections", "[]")
+        }
+      }
+    }
+
+    fetchFilteredAcademicSections()
+  }, [formData.academicDepartment, formData.academicCourseProgram, formData.academicYearLevels, schoolYearId, updateField])
+
   // Fetch existing profile data when editing
   useEffect(() => {
     const fetchExistingProfile = async () => {
@@ -436,7 +555,6 @@ export function UnifiedProfileSetupForm({
               departmentAssigned: existingProfile.departmentAssigned || "",
               yearsOfService: existingProfile.yearsOfService?.toString() || "",
               messageToStudents: existingProfile.messageToStudents || "",
-              isARSister: existingProfile.isARSister || false,
 
               // Staff fields
               officeAssigned: existingProfile.officeAssigned || "",
@@ -459,6 +577,10 @@ export function UnifiedProfileSetupForm({
               courses: existingProfile.courses || "",
               additionalRoles: existingProfile.additionalRoles || "",
 
+              // AR Sisters specific fields
+              customPosition: existingProfile.customPosition || "",
+              education: existingProfile.education || "",
+
               // Alumni-specific additional fields
               achievements: existingProfile.achievements || "",
               activities: existingProfile.activities || "",
@@ -472,6 +594,41 @@ export function UnifiedProfileSetupForm({
             Object.entries(profileData).forEach(([key, value]) => {
               updateField(key, value)
             })
+
+            // Set the correct role based on existing profile
+            if (existingProfile.userType) {
+              setSelectedRole(existingProfile.userType as UserRole)
+            } else if (existingProfile.collectionName) {
+              // Determine role from collection name
+              const collectionToRole: Record<string, UserRole> = {
+                'College_yearbook': 'student',
+                'SeniorHigh_yearbook': 'student',
+                'JuniorHigh_yearbook': 'student',
+                'Elementary_yearbook': 'student',
+                'Alumni_yearbook': 'alumni',
+                'FacultyStaff_yearbook': 'faculty', // Default to faculty, could be staff/utility
+                'ARSisters_yearbook': 'ar-sisters'
+              }
+              const role = collectionToRole[existingProfile.collectionName]
+              if (role) {
+                setSelectedRole(role)
+              }
+            }
+
+            // Handle AR Sisters custom position
+            if (existingProfile.userType === 'ar-sisters' || existingProfile.collectionName === 'ARSisters_yearbook') {
+              const predefinedPositions = [
+                'School Directress', 'Assistant Directress', 'Principal', 'Assistant Principal',
+                'Registrar', 'Guidance Counselor', 'Librarian', 'Accountant', 'Cashier',
+                'Maintenance Staff', 'Security Guard', 'Cafeteria Staff', 'Others'
+              ]
+              
+              if (existingProfile.position && !predefinedPositions.includes(existingProfile.position)) {
+                // Position is custom, set to "Others" and populate customPosition
+                updateField('position', 'Others')
+                updateField('customPosition', existingProfile.position)
+              }
+            }
 
             // Set profile photo if exists
             if (existingProfile.profilePicture) {
@@ -647,7 +804,7 @@ export function UnifiedProfileSetupForm({
           officerRole: formData.officerRole,
         }),
         
-        ...(selectedRole === "faculty" && {
+        ...(selectedRole === "faculty" || selectedRole === "advisory" && {
           position: formData.position,
           department: formData.departmentAssigned === "Others" ? formData.customDepartmentAssigned : formData.departmentAssigned,
           departmentAssigned: formData.departmentAssigned === "Others" ? formData.customDepartmentAssigned : formData.departmentAssigned,
@@ -655,7 +812,11 @@ export function UnifiedProfileSetupForm({
           messageToStudents: formData.messageToStudents,
           courses: formData.courses,
           additionalRoles: formData.additionalRoles,
-          isARSister: formData.isARSister,
+          // Academic Information for Advisory Roles
+          academicDepartment: formData.academicDepartment,
+          academicYearLevels: formData.academicYearLevels,
+          academicCourseProgram: formData.academicCourseProgram,
+          academicSections: formData.academicSections,
         }),
         
         ...((selectedRole === "staff" || selectedRole === "utility") && {
@@ -664,6 +825,17 @@ export function UnifiedProfileSetupForm({
           officeAssigned: formData.officeAssigned === "Others" ? formData.customOfficeAssigned : formData.officeAssigned,
           yearsOfService: formData.yearsOfService,
           messageToStudents: formData.messageToStudents,
+        }),
+        
+        ...(selectedRole === "ar-sisters" && {
+          position: formData.position === "Others" ? formData.customPosition : formData.position,
+          customPosition: formData.customPosition || "",
+          department: "AR Sisters", // AR Sisters have their own collection
+          departmentAssigned: formData.departmentAssigned === "Others" ? formData.customDepartmentAssigned : formData.departmentAssigned,
+          yearsOfService: formData.yearsOfService,
+          messageToStudents: formData.messageToStudents,
+          additionalRoles: formData.additionalRoles,
+          education: formData.education,
         }),
         
         ...(selectedRole === "alumni" && {
@@ -698,6 +870,7 @@ export function UnifiedProfileSetupForm({
           userType: selectedRole,
           profileData,
           userId,
+          isAdminEdit,
         }),
       })
 
@@ -804,6 +977,8 @@ export function UnifiedProfileSetupForm({
         return <Briefcase className="h-4 w-4" />
       case "utility":
         return <Wrench className="h-4 w-4" />
+      case "ar-sisters":
+        return <Heart className="h-4 w-4" />
     }
   }
 
@@ -819,6 +994,8 @@ export function UnifiedProfileSetupForm({
         return "Staff"
       case "utility":
         return "Utility (Maintenance)"
+      case "ar-sisters":
+        return "AR Sisters"
     }
   }
 
@@ -987,6 +1164,18 @@ export function UnifiedProfileSetupForm({
                       <div className="flex items-center gap-2">
                         <Wrench className="h-4 w-4" />
                         Utility (Maintenance)
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="ar-sisters">
+                      <div className="flex items-center gap-2">
+                        <Heart className="h-4 w-4" />
+                        AR Sisters
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="advisory">
+                      <div className="flex items-center gap-2">
+                        <GraduationCap className="h-4 w-4" />
+                        Advisory
                       </div>
                     </SelectItem>
                   </SelectContent>
@@ -1187,7 +1376,7 @@ export function UnifiedProfileSetupForm({
 
                   {showMajorsDropdown && (
                     <div className="space-y-2">
-                      <Label htmlFor="major">Major (Optional)</Label>
+                      <Label htmlFor="major">Major *</Label>
                       <Select
                         value={formData.major}
                         onValueChange={(value) => handleInputChange("major", value)}
@@ -1288,8 +1477,8 @@ export function UnifiedProfileSetupForm({
             </Card>
           )}
 
-          {/* Professional Information - Faculty, Staff & Utility */}
-          {(selectedRole === "faculty" || selectedRole === "staff" || selectedRole === "utility") && (
+          {/* Professional Information - Faculty, Staff, Utility, AR Sisters & Advisory */}
+          {(selectedRole === "faculty" || selectedRole === "staff" || selectedRole === "utility" || selectedRole === "ar-sisters" || selectedRole === "advisory") && (
             <Card className="p-6">
               <CardHeader className="px-0 pt-0 pb-4">
                 <CardTitle className="text-lg flex items-center gap-2">
@@ -1307,6 +1496,9 @@ export function UnifiedProfileSetupForm({
                       // Reset department when position changes
                       handleInputChange("departmentAssigned", "")
                       handleInputChange("customDepartmentAssigned", "")
+                      if (selectedRole === "ar-sisters" && value !== "Others") {
+                        handleInputChange("customPosition", "")
+                      }
                     }}
                   >
                     <SelectTrigger className={errors.position ? "border-red-500" : ""}>
@@ -1316,8 +1508,8 @@ export function UnifiedProfileSetupForm({
                       {selectedRole === "faculty" ? (
                         <>
                           <SelectItem value="Department Head">Department Head</SelectItem>
-                          <SelectItem value="School Directress">School Directress</SelectItem>
-                          <SelectItem value="Teacher">Teacher</SelectItem>
+                          <SelectItem value="Subject Teacher">Subject Teacher</SelectItem>
+                          <SelectItem value="Teacher Adviser">Teacher Adviser</SelectItem>
                         </>
                       ) : selectedRole === "staff" ? (
                         <>
@@ -1328,6 +1520,28 @@ export function UnifiedProfileSetupForm({
                           <SelectItem value="IT Support">IT Support</SelectItem>
                           <SelectItem value="Guidance Counselor">Guidance Counselor</SelectItem>
                           <SelectItem value="Security Guard">Security Guard</SelectItem>
+                          <SelectItem value="Others">Others</SelectItem>
+                        </>
+                      ) : selectedRole === "ar-sisters" ? (
+                        <>
+                          <SelectItem value="School Directress">School Directress</SelectItem>
+                          <SelectItem value="Department Head">Department Head</SelectItem>
+                          <SelectItem value="Subject Teacher">Subject Teacher</SelectItem>
+                          <SelectItem value="Teacher Adviser">Teacher Adviser</SelectItem>
+                          <SelectItem value="Guidance Counselor">Guidance Counselor</SelectItem>
+                          <SelectItem value="Librarian">Librarian</SelectItem>
+                          <SelectItem value="Registrar">Registrar</SelectItem>
+                          <SelectItem value="Finance Officer">Finance Officer</SelectItem>
+                          <SelectItem value="HR Officer">HR Officer</SelectItem>
+                          <SelectItem value="Others">Others</SelectItem>
+                        </>
+                      ) : selectedRole === "advisory" ? (
+                        <>
+                          <SelectItem value="Teacher Adviser">Teacher Adviser</SelectItem>
+                          <SelectItem value="Class Adviser">Class Adviser</SelectItem>
+                          <SelectItem value="Subject Teacher">Subject Teacher</SelectItem>
+                          <SelectItem value="Guidance Counselor">Guidance Counselor</SelectItem>
+                          <SelectItem value="Student Affairs Coordinator">Student Affairs Coordinator</SelectItem>
                           <SelectItem value="Others">Others</SelectItem>
                         </>
                       ) : (
@@ -1344,22 +1558,36 @@ export function UnifiedProfileSetupForm({
                     </SelectContent>
                   </Select>
                   {errors.position && <p className="text-sm text-red-600">{errors.position}</p>}
+                  
+                  {selectedRole === "ar-sisters" && formData.position === "Others" && (
+                    <div className="mt-2">
+                      <Label htmlFor="customPosition">Enter Specific Position/Role *</Label>
+                      <Input
+                        id="customPosition"
+                        placeholder="Enter specific position/role"
+                        value={formData.customPosition}
+                        onChange={(e) => handleInputChange("customPosition", e.target.value)}
+                        className={errors.customPosition ? "border-red-500" : ""}
+                      />
+                      {errors.customPosition && <p className="text-sm text-red-600">{errors.customPosition}</p>}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor={selectedRole === "faculty" ? "departmentAssigned" : "officeAssigned"}>
-                    {selectedRole === "faculty" ? "Department Assigned *" : "Department/Office Assigned *"}
+                  <Label htmlFor={selectedRole === "faculty" || selectedRole === "advisory" ? "departmentAssigned" : "officeAssigned"}>
+                    {selectedRole === "faculty" || selectedRole === "advisory" ? "Department Assigned *" : "Department/Office Assigned *"}
                   </Label>
                   <Select
-                    value={selectedRole === "faculty" ? formData.departmentAssigned : formData.officeAssigned}
+                    value={selectedRole === "faculty" || selectedRole === "advisory" ? formData.departmentAssigned : formData.officeAssigned}
                     onValueChange={(value) => {
                       handleInputChange(
-                        selectedRole === "faculty" ? "departmentAssigned" : "officeAssigned",
+                        selectedRole === "faculty" || selectedRole === "advisory" ? "departmentAssigned" : "officeAssigned",
                         value,
                       )
                       if (value !== "Others") {
                         handleInputChange(
-                          selectedRole === "faculty" ? "customDepartmentAssigned" : "customOfficeAssigned",
+                          selectedRole === "faculty" || selectedRole === "advisory" ? "customDepartmentAssigned" : "customOfficeAssigned",
                           "",
                         )
                       }
@@ -1367,13 +1595,13 @@ export function UnifiedProfileSetupForm({
                   >
                     <SelectTrigger
                       className={
-                        errors[selectedRole === "faculty" ? "departmentAssigned" : "officeAssigned"]
+                        errors[selectedRole === "faculty" || selectedRole === "advisory" ? "departmentAssigned" : "officeAssigned"]
                           ? "border-red-500"
                           : ""
                       }
                     >
                       <SelectValue placeholder={
-                        selectedRole === "faculty"
+                        selectedRole === "faculty" || selectedRole === "advisory"
                           ? "Select department"
                           : "Select office"
                       } />
@@ -1382,9 +1610,7 @@ export function UnifiedProfileSetupForm({
                       {selectedRole === "faculty" ? (
                         <>
                           {/* Dynamic department options based on position */}
-                          {formData.position === "School Directress" ? (
-                            <SelectItem value="School Dean">School Dean</SelectItem>
-                          ) : (formData.position === "Department Head" || formData.position === "Teacher") ? (
+                          {(formData.position === "Department Head" || formData.position === "Subject Teacher" || formData.position === "Teacher Adviser") ? (
                             <>
                               <SelectItem value="College of Computer Studies">College of Computer Studies</SelectItem>
                               <SelectItem value="College of Hospitality Management">College of Hospitality Management</SelectItem>
@@ -1420,6 +1646,15 @@ export function UnifiedProfileSetupForm({
                           <SelectItem value="Maintenance">Maintenance</SelectItem>
                           <SelectItem value="Others">Others</SelectItem>
                         </>
+                      ) : selectedRole === "advisory" ? (
+                        <>
+                          <SelectItem value="Elementary">Elementary</SelectItem>
+                          <SelectItem value="Junior High">Junior High</SelectItem>
+                          <SelectItem value="Senior High">Senior High</SelectItem>
+                          <SelectItem value="College">College</SelectItem>
+                          <SelectItem value="Administration">Administration</SelectItem>
+                          <SelectItem value="Others">Others</SelectItem>
+                        </>
                       ) : (
                         <>
                           <SelectItem value="Maintenance">Maintenance</SelectItem>
@@ -1433,44 +1668,44 @@ export function UnifiedProfileSetupForm({
                       )}
                     </SelectContent>
                   </Select>
-                  {errors[selectedRole === "faculty" ? "departmentAssigned" : "officeAssigned"] && (
+                  {errors[selectedRole === "faculty" || selectedRole === "advisory" ? "departmentAssigned" : "officeAssigned"] && (
                     <p className="text-sm text-red-600">
-                      {errors[selectedRole === "faculty" ? "departmentAssigned" : "officeAssigned"]}
+                      {errors[selectedRole === "faculty" || selectedRole === "advisory" ? "departmentAssigned" : "officeAssigned"]}
                     </p>
                   )}
                   
-                  {(selectedRole === "faculty" ? formData.departmentAssigned : formData.officeAssigned) === "Others" && (
+                  {(selectedRole === "faculty" || selectedRole === "advisory" ? formData.departmentAssigned : formData.officeAssigned) === "Others" && (
                     <div className="mt-2">
-                      <Label htmlFor={selectedRole === "faculty" ? "customDepartmentAssigned" : "customOfficeAssigned"}>
-                        {selectedRole === "faculty" ? "Enter Correct Department Assigned *" : 
+                      <Label htmlFor={selectedRole === "faculty" || selectedRole === "advisory" ? "customDepartmentAssigned" : "customOfficeAssigned"}>
+                        {selectedRole === "faculty" || selectedRole === "advisory" ? "Enter Correct Department Assigned *" : 
                          selectedRole === "staff" ? "Enter Correct Department/Office Assigned *" :
                          "Enter Specific Department Assigned *"}
                       </Label>
                       <Input
-                        id={selectedRole === "faculty" ? "customDepartmentAssigned" : "customOfficeAssigned"}
+                        id={selectedRole === "faculty" || selectedRole === "advisory" ? "customDepartmentAssigned" : "customOfficeAssigned"}
                         placeholder={
-                          selectedRole === "faculty"
+                          selectedRole === "faculty" || selectedRole === "advisory"
                             ? "Enter department name"
                             : selectedRole === "staff"
                             ? "Enter office name"
                             : "Enter department name"
                         }
-                        value={selectedRole === "faculty" ? formData.customDepartmentAssigned : formData.customOfficeAssigned}
+                        value={selectedRole === "faculty" || selectedRole === "advisory" ? formData.customDepartmentAssigned : formData.customOfficeAssigned}
                         onChange={(e) =>
                           handleInputChange(
-                            selectedRole === "faculty" ? "customDepartmentAssigned" : "customOfficeAssigned",
+                            selectedRole === "faculty" || selectedRole === "advisory" ? "customDepartmentAssigned" : "customOfficeAssigned",
                             e.target.value,
                           )
                         }
                         className={
-                          errors[selectedRole === "faculty" ? "customDepartmentAssigned" : "customOfficeAssigned"]
+                          errors[selectedRole === "faculty" || selectedRole === "advisory" ? "customDepartmentAssigned" : "customOfficeAssigned"]
                             ? "border-red-500"
                             : ""
                         }
                       />
-                      {errors[selectedRole === "faculty" ? "customDepartmentAssigned" : "customOfficeAssigned"] && (
+                      {errors[selectedRole === "faculty" || selectedRole === "advisory" ? "customDepartmentAssigned" : "customOfficeAssigned"] && (
                         <p className="text-sm text-red-600">
-                          {errors[selectedRole === "faculty" ? "customDepartmentAssigned" : "customOfficeAssigned"]}
+                          {errors[selectedRole === "faculty" || selectedRole === "advisory" ? "customDepartmentAssigned" : "customOfficeAssigned"]}
                         </p>
                       )}
                     </div>
@@ -1490,27 +1725,8 @@ export function UnifiedProfileSetupForm({
                   {errors.yearsOfService && <p className="text-sm text-red-600">{errors.yearsOfService}</p>}
                 </div>
 
-                {selectedRole === "faculty" && (
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="isARSister"
-                        checked={formData.isARSister}
-                        onChange={(e) => handleInputChange("isARSister", e.target.checked.toString())}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <Label htmlFor="isARSister" className="text-sm font-medium">
-                        AR Sister (A.R.)
-                      </Label>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      Check this if you are an AR Sister (A.R.)
-                    </p>
-                  </div>
-                )}
 
-                {(selectedRole === "faculty" || selectedRole === "staff" || selectedRole === "utility") && (
+                {(selectedRole === "faculty" || selectedRole === "staff" || selectedRole === "utility" || selectedRole === "ar-sisters") && (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor="messageToStudents">
@@ -1527,7 +1743,7 @@ export function UnifiedProfileSetupForm({
                       {errors.messageToStudents && <p className="text-sm text-red-600">{errors.messageToStudents}</p>}
                     </div>
 
-                    {selectedRole === "faculty" && (
+                    {selectedRole === "faculty" || selectedRole === "advisory" && (
                       <>
                         <div className="space-y-2">
                           <Label htmlFor="courses">Courses Taught</Label>
@@ -1552,10 +1768,52 @@ export function UnifiedProfileSetupForm({
                         </div>
                       </>
                     )}
+
+                    {selectedRole === "ar-sisters" && (
+                      <>
+                        <div className="space-y-2">
+                          <Label htmlFor="education">Educational Background</Label>
+                          <Textarea
+                            id="education"
+                            placeholder="Bachelor of Education, Master of Arts in Education"
+                            value={formData.education}
+                            onChange={(e) => handleInputChange("education", e.target.value)}
+                            rows={3}
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="additionalRoles">Additional Roles & Responsibilities</Label>
+                          <Textarea
+                            id="additionalRoles"
+                            placeholder="Any additional roles or responsibilities"
+                            value={formData.additionalRoles}
+                            onChange={(e) => handleInputChange("additionalRoles", e.target.value)}
+                            rows={3}
+                          />
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
               </CardContent>
             </Card>
+          )}
+
+          {/* Advisory Information */}
+          {selectedRole === "advisory" && (
+            <AdvisoryForm
+              schoolYearId={schoolYearId}
+              formData={{
+                academicDepartment: formData.academicDepartment || "",
+                academicYearLevels: formData.academicYearLevels || "[]",
+                academicCourseProgram: formData.academicCourseProgram || "",
+                academicSections: formData.academicSections || "[]",
+                messageToStudents: formData.messageToStudents || ""
+              }}
+              onInputChange={updateField}
+              errors={errors}
+            />
           )}
 
           {/* Career Information - Alumni */}

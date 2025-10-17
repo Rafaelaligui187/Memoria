@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
-import { MessageSquare, AlertTriangle, CheckCircle, Clock, Eye, Reply, Archive, Filter, RefreshCw } from "lucide-react"
+import { MessageSquare, AlertTriangle, CheckCircle, Clock, Eye, Reply, Archive, Filter, RefreshCw, Paperclip, Download, FileText, Image } from "lucide-react"
 
 interface Report {
   _id?: string
@@ -36,7 +36,12 @@ interface Report {
   assignedTo?: string
   adminReply?: string
   schoolYearId: string
-  attachments?: string[]
+  attachments?: Array<{
+    url: string
+    filename: string
+    size: number
+    type: string
+  }>
 }
 
 const reportCategories = {
@@ -157,6 +162,9 @@ export function ReportsManagement({ selectedYear, selectedYearLabel }: ReportsMa
         if (newStatus === "resolved") {
           window.dispatchEvent(new CustomEvent('refreshUserMessages'))
         }
+        
+        // Dispatch event to update user notifications
+        window.dispatchEvent(new CustomEvent('messageStatusChanged'))
       } else {
         toast({
           title: "Error",
@@ -226,6 +234,9 @@ export function ReportsManagement({ selectedYear, selectedYearLabel }: ReportsMa
         
         // Trigger refresh for user message history
         window.dispatchEvent(new CustomEvent('refreshUserMessages'))
+        
+        // Dispatch event to update user notifications
+        window.dispatchEvent(new CustomEvent('messageStatusChanged'))
       } else {
         toast({
           title: "Error",
@@ -445,6 +456,12 @@ export function ReportsManagement({ selectedYear, selectedYearLabel }: ReportsMa
                         <div className="flex items-center gap-2 mb-1">
                           <h4 className="font-medium">{report.subject}</h4>
                           {getPriorityBadge(report.priority)}
+                          {report.attachments && report.attachments.length > 0 && (
+                            <Badge variant="outline" className="text-xs">
+                              <Paperclip className="h-3 w-3 mr-1" />
+                              {report.attachments.length} file{report.attachments.length > 1 ? 's' : ''}
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground mb-1">
                           {reportCategories[report.category]} • {report.userName}
@@ -506,6 +523,12 @@ export function ReportsManagement({ selectedYear, selectedYearLabel }: ReportsMa
                         <div className="flex items-center gap-2 mb-1">
                           <h4 className="font-medium">{report.subject}</h4>
                           {getPriorityBadge(report.priority)}
+                          {report.attachments && report.attachments.length > 0 && (
+                            <Badge variant="outline" className="text-xs">
+                              <Paperclip className="h-3 w-3 mr-1" />
+                              {report.attachments.length} file{report.attachments.length > 1 ? 's' : ''}
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-sm text-muted-foreground mb-1">
                           {reportCategories[report.category]} • {report.userName}
@@ -636,6 +659,59 @@ export function ReportsManagement({ selectedYear, selectedYearLabel }: ReportsMa
                 <Label className="text-sm font-medium">Description</Label>
                 <p className="text-sm mt-1">{selectedReport.description}</p>
               </div>
+
+              {selectedReport.attachments && selectedReport.attachments.length > 0 && (
+                <div>
+                  <Label className="text-sm font-medium">Attachments</Label>
+                  <div className="mt-2 space-y-2">
+                    {selectedReport.attachments.map((attachment, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                        <div className="flex items-center gap-3">
+                          {attachment.type.startsWith('image/') ? (
+                            <Image className="h-5 w-5 text-blue-500" />
+                          ) : (
+                            <FileText className="h-5 w-5 text-gray-500" />
+                          )}
+                          <div>
+                            <p className="text-sm font-medium">{attachment.filename}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {(attachment.size / 1024 / 1024).toFixed(1)} MB
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {attachment.type.startsWith('image/') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => window.open(attachment.url, '_blank')}
+                              className="h-8 px-2"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const link = document.createElement('a')
+                              link.href = attachment.url
+                              link.download = attachment.filename
+                              link.target = '_blank'
+                              document.body.appendChild(link)
+                              link.click()
+                              document.body.removeChild(link)
+                            }}
+                            className="h-8 px-2"
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {selectedReport.adminReply && (
                 <div>

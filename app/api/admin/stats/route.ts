@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     }
 
     const db = await connectToDatabase()
-    const collectionsToSearch = Object.values(YEARBOOK_COLLECTIONS)
+    const collectionsToSearch = [...Object.values(YEARBOOK_COLLECTIONS), 'advisory_profiles']
 
     let totalApprovedCount = 0
     let totalPendingCount = 0

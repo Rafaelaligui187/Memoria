@@ -9,9 +9,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { ArrowLeft, Heart, GraduationCap, Users, Briefcase, UserCheck, Save, Upload, User, Plus, X } from "lucide-react"
+import { ArrowLeft, Heart, GraduationCap, Users, Briefcase, UserCheck, Save, Upload, User, Plus, X, Award, Share2 } from "lucide-react"
 import Image from "next/image"
 import { uploadProfileImage, validateImageFile, getImagePreviewUrl } from "@/lib/image-upload-utils"
+import { AdvisoryForm } from "@/components/advisory-form"
 import { useFormValidation } from "@/hooks/use-form-validation"
 import { commonValidationRules } from "@/lib/form-validation"
 import { FormField } from "@/components/form-field"
@@ -23,7 +24,7 @@ interface CreateManualProfileFormProps {
   onSave: () => void
 }
 
-type UserRole = "student" | "faculty" | "alumni" | "staff" | "utility"
+type UserRole = "student" | "faculty" | "alumni" | "staff" | "utility" | "ar-sisters" | "advisory"
 
 // Dynamic academic data structure
 const departmentData = {
@@ -85,6 +86,12 @@ export function CreateManualProfileForm({
   const [programDetails, setProgramDetails] = useState<any>({})
   const [departmentData, setDepartmentData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  
+  // Academic Information state for faculty
+  const [availableAcademicYearLevels, setAvailableAcademicYearLevels] = useState<string[]>([])
+  const [availableAcademicPrograms, setAvailableAcademicPrograms] = useState<string[]>([])
+  const [availableAcademicSections, setAvailableAcademicSections] = useState<{name: string, yearLevel: string}[]>([])
+  
   const { toast } = useToast()
 
   const initialFormData = {
@@ -121,11 +128,20 @@ export function CreateManualProfileForm({
     customDepartmentAssigned: "",
     yearsOfService: "",
     messageToStudents: "",
-    isARSister: "false",
+    
+    // Faculty Academic Information (for advisory roles)
+    academicDepartment: "",
+    academicYearLevels: "[]",
+    academicCourseProgram: "",
+    academicSections: "[]",
 
     // Staff fields (includes maintenance)
     officeAssigned: "",
     customOfficeAssigned: "",
+
+    // AR Sisters specific fields
+    customPosition: "",
+    education: "",
 
     // Alumni fields
     graduationYear: "",
@@ -346,6 +362,82 @@ export function CreateManualProfileForm({
     }
   }, [formData.courseProgram, formData.department, departmentData, updateField])
 
+  // Academic Information dynamic dropdown logic for faculty
+  useEffect(() => {
+    if (departmentData && formData.academicDepartment && departmentData[formData.academicDepartment]) {
+      const deptData = departmentData[formData.academicDepartment]
+      setAvailableAcademicYearLevels(deptData.yearLevels || [])
+      setAvailableAcademicPrograms(deptData.programs || [])
+      
+      // Reset dependent fields when department changes
+      updateField("academicYearLevels", [])
+      updateField("academicCourseProgram", "")
+      updateField("academicSections", [])
+      setAvailableAcademicSections([]) // Clear sections initially
+    }
+  }, [formData.academicDepartment, departmentData, updateField])
+
+  // Fetch filtered academic sections when course/program and year levels are selected
+  useEffect(() => {
+    const fetchFilteredAcademicSections = async () => {
+      if (formData.academicDepartment && formData.academicCourseProgram && formData.academicYearLevels?.length > 0) {
+        try {
+          // Make multiple API calls for each selected year level
+          const sectionPromises = formData.academicYearLevels.map(async (yearLevel) => {
+            const params = new URLSearchParams({
+              schoolYearId: schoolYearId,
+              department: formData.academicDepartment,
+              program: formData.academicCourseProgram,
+              yearLevel: yearLevel
+            })
+            
+            const response = await fetch(`/api/admin/form-data?${params}`)
+            const result = await response.json()
+            
+            if (result.success) {
+              // Return sections with their year level information
+              return (result.data.sections || []).map((section: string) => ({
+                name: section,
+                yearLevel: yearLevel
+              }))
+            }
+            return []
+          })
+          
+          // Wait for all API calls to complete
+          const sectionResults = await Promise.all(sectionPromises)
+          
+          // Combine sections from all year levels
+          const allSections = sectionResults.flat()
+          
+          setAvailableAcademicSections(allSections)
+          console.log(`Filtered academic sections for ${formData.academicDepartment} - ${formData.academicCourseProgram} - ${formData.academicYearLevels}:`, allSections)
+          
+          // Reset academic sections if current selections are not available
+          if (formData.academicSections?.length > 0) {
+            const availableSectionKeys = allSections.map(s => `${s.name}-${s.yearLevel}`)
+            const validSections = formData.academicSections.filter((section: string) => 
+              availableSectionKeys.includes(section)
+            )
+            if (validSections.length !== formData.academicSections.length) {
+              updateField("academicSections", validSections)
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching filtered academic sections:', error)
+        }
+      } else {
+        // If not all required fields are selected, clear sections
+        setAvailableAcademicSections([])
+        if (formData.academicSections?.length > 0) {
+          updateField("academicSections", [])
+        }
+      }
+    }
+
+    fetchFilteredAcademicSections()
+  }, [formData.academicDepartment, formData.academicCourseProgram, formData.academicYearLevels, schoolYearId, updateField])
+
   const addAchievement = () => {
     if (newAchievement.trim() && achievements.length < 10) {
       setAchievements([...achievements, newAchievement.trim()])
@@ -363,7 +455,7 @@ export function CreateManualProfileForm({
     setAchievements(achievements.filter((_, i) => i !== index))
   }
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: string | string[]) => {
     updateField(field, value)
     
     // Auto-calculate age when birthday changes
@@ -433,7 +525,7 @@ export function CreateManualProfileForm({
 
   const handleSave = async () => {
     // Add profile photo validation
-    if (!profilePhoto) {
+    if (!formData.profilePicture || formData.profilePicture.trim() === "") {
       toast({
         title: "Validation Error",
         description: "Profile photo is required.",
@@ -508,7 +600,7 @@ export function CreateManualProfileForm({
               officerRole: formData.officerRole,
             }),
             
-            ...(selectedRole === "faculty" && {
+            ...((selectedRole === "faculty" || selectedRole === "advisory") && {
               position: formData.position,
               department: formData.departmentAssigned === "Others" ? formData.customDepartmentAssigned : formData.departmentAssigned,
               departmentAssigned: formData.departmentAssigned === "Others" ? formData.customDepartmentAssigned : formData.departmentAssigned,
@@ -516,7 +608,14 @@ export function CreateManualProfileForm({
               messageToStudents: formData.messageToStudents,
               courses: formData.courses,
               additionalRoles: formData.additionalRoles,
-              isARSister: formData.isARSister === "true",
+            }),
+            
+            // Advisory-specific fields
+            ...(selectedRole === "advisory" && {
+              academicDepartment: formData.academicDepartment,
+              academicYearLevels: formData.academicYearLevels,
+              academicCourseProgram: formData.academicCourseProgram,
+              academicSections: formData.academicSections,
             }),
             
             ...(selectedRole === "staff" && {
@@ -533,6 +632,17 @@ export function CreateManualProfileForm({
               officeAssigned: formData.officeAssigned === "Others" ? formData.customOfficeAssigned : formData.officeAssigned,
               yearsOfService: formData.yearsOfService ? Number(formData.yearsOfService) : undefined,
               messageToStudents: formData.messageToStudents,
+            }),
+            
+            ...(selectedRole === "ar-sisters" && {
+              position: formData.position === "Others" && formData.customPosition ? formData.customPosition : formData.position,
+              customPosition: formData.customPosition || "",
+              department: "AR Sisters", // AR Sisters have their own collection
+              departmentAssigned: formData.departmentAssigned === "Others" ? formData.customDepartmentAssigned : formData.departmentAssigned,
+              yearsOfService: formData.yearsOfService ? Number(formData.yearsOfService) : undefined,
+              messageToStudents: formData.messageToStudents,
+              additionalRoles: formData.additionalRoles,
+              education: formData.education,
             }),
             
             ...(selectedRole === "alumni" && {
@@ -604,6 +714,10 @@ export function CreateManualProfileForm({
         return <Briefcase className="h-4 w-4" />
       case "utility":
         return <Briefcase className="h-4 w-4" />
+      case "ar-sisters":
+        return <Heart className="h-4 w-4" />
+      case "advisory":
+        return <GraduationCap className="h-4 w-4" />
     }
   }
 
@@ -638,8 +752,8 @@ export function CreateManualProfileForm({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Department Head">Department Head</SelectItem>
-                        <SelectItem value="School Directress">School Directress</SelectItem>
-                        <SelectItem value="Teacher">Teacher</SelectItem>
+                        <SelectItem value="Subject Teacher">Subject Teacher</SelectItem>
+                        <SelectItem value="Teacher Adviser">Teacher Adviser</SelectItem>
                       </SelectContent>
                     </Select>
                     {errors.position && <p className="text-sm text-red-600">{errors.position}</p>}
@@ -657,9 +771,7 @@ export function CreateManualProfileForm({
                       </SelectTrigger>
                       <SelectContent>
                         {/* Dynamic department options based on position */}
-                        {formData.position === "School Directress" ? (
-                          <SelectItem value="School Dean">School Dean</SelectItem>
-                        ) : (formData.position === "Department Head" || formData.position === "Teacher") ? (
+                        {(formData.position === "Department Head" || formData.position === "Teacher") ? (
                           <>
                             <SelectItem value="College of Computer Studies">College of Computer Studies</SelectItem>
                             <SelectItem value="College of Hospitality Management">College of Hospitality Management</SelectItem>
@@ -712,23 +824,6 @@ export function CreateManualProfileForm({
                     {errors.yearsOfService && <p className="text-sm text-red-600">{errors.yearsOfService}</p>}
                   </div>
                   
-                  <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        id="isARSister"
-                        checked={formData.isARSister === "true"}
-                        onChange={(e) => handleInputChange("isARSister", e.target.checked.toString())}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <Label htmlFor="isARSister" className="text-sm font-medium">
-                        AR Sister (A.R.)
-                      </Label>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      Check this if the faculty member is an AR Sister (A.R.)
-                    </p>
-                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="messageToStudents">Message to Students</Label>
@@ -1043,13 +1138,22 @@ export function CreateManualProfileForm({
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="courseProgram">Course/Program (when studied) *</Label>
-                    <Input
-                      id="courseProgram"
-                      placeholder="Enter course/program studied"
+                    <Select
                       value={formData.courseProgram}
-                      onChange={(e) => handleInputChange("courseProgram", e.target.value)}
-                      className={errors.courseProgram ? "border-red-500" : ""}
-                    />
+                      onValueChange={(value) => handleInputChange("courseProgram", value)}
+                      disabled={!formData.department}
+                    >
+                      <SelectTrigger className={errors.courseProgram ? "border-red-500" : ""}>
+                        <SelectValue placeholder="Select course/program" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availablePrograms.map((program) => (
+                          <SelectItem key={program} value={program}>
+                            {program}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     {errors.courseProgram && <p className="text-sm text-red-600">{errors.courseProgram}</p>}
                   </div>
                   <div className="space-y-2">
@@ -1519,6 +1623,596 @@ export function CreateManualProfileForm({
           </Card>
         )
 
+      case "ar-sisters":
+        return (
+          <div className="space-y-6">
+            {/* Religious & Professional Information */}
+            <Card className="border-purple-200 bg-purple-50/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Heart className="h-4 w-4 text-purple-600" />
+                  Religious & Professional Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="position">Position/Role *</Label>
+                    <Select
+                      value={formData.position}
+                      onValueChange={(value) => {
+                        handleInputChange("position", value)
+                        handleInputChange("departmentAssigned", "")
+                        handleInputChange("customDepartmentAssigned", "")
+                        if (value !== "Others") {
+                          handleInputChange("customPosition", "")
+                        }
+                      }}
+                    >
+                      <SelectTrigger className={errors.position ? "border-red-500" : ""}>
+                        <SelectValue placeholder="Select position/role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="School Directress">School Directress</SelectItem>
+                        <SelectItem value="Department Head">Department Head</SelectItem>
+                        <SelectItem value="Teacher">Teacher</SelectItem>
+                        <SelectItem value="Guidance Counselor">Guidance Counselor</SelectItem>
+                        <SelectItem value="Librarian">Librarian</SelectItem>
+                        <SelectItem value="Registrar">Registrar</SelectItem>
+                        <SelectItem value="Finance Officer">Finance Officer</SelectItem>
+                        <SelectItem value="HR Officer">HR Officer</SelectItem>
+                        <SelectItem value="Others">Others</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {errors.position && <p className="text-sm text-red-600">{errors.position}</p>}
+                    
+                    {formData.position === "Others" && (
+                      <div className="mt-2">
+                        <Label htmlFor="customPosition">Enter Specific Position/Role *</Label>
+                        <Input
+                          id="customPosition"
+                          placeholder="Enter specific position/role"
+                          value={formData.customPosition}
+                          onChange={(e) => handleInputChange("customPosition", e.target.value)}
+                          className={errors.customPosition ? "border-red-500" : ""}
+                        />
+                        {errors.customPosition && <p className="text-sm text-red-600">{errors.customPosition}</p>}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="departmentAssigned">Department Assigned *</Label>
+                    <Select value={formData.departmentAssigned} onValueChange={(value) => {
+                      handleInputChange("departmentAssigned", value)
+                      if (value !== "Others") {
+                        handleInputChange("customDepartmentAssigned", "")
+                      }
+                    }}>
+                      <SelectTrigger className={errors.departmentAssigned ? "border-red-500" : ""}>
+                        <SelectValue placeholder="Select department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {formData.position === "School Directress" ? (
+                          <SelectItem value="School Dean">School Dean</SelectItem>
+                        ) : (formData.position === "Department Head" || formData.position === "Teacher") ? (
+                          <>
+                            <SelectItem value="College of Computer Studies">College of Computer Studies</SelectItem>
+                            <SelectItem value="College of Hospitality Management">College of Hospitality Management</SelectItem>
+                            <SelectItem value="College of Education">College of Education</SelectItem>
+                            <SelectItem value="College of Agriculture">College of Agriculture</SelectItem>
+                            <SelectItem value="Elementary Department">Elementary Department</SelectItem>
+                            <SelectItem value="Junior High School Department">Junior High School Department</SelectItem>
+                            <SelectItem value="Senior High School Department">Senior High School Department</SelectItem>
+                            <SelectItem value="Administration">Administration</SelectItem>
+                            <SelectItem value="Others">Others</SelectItem>
+                          </>
+                        ) : (
+                          <>
+                            <SelectItem value="Administration">Administration</SelectItem>
+                            <SelectItem value="Registrar">Registrar</SelectItem>
+                            <SelectItem value="Finance">Finance</SelectItem>
+                            <SelectItem value="Human Resources">Human Resources</SelectItem>
+                            <SelectItem value="IT Department">IT Department</SelectItem>
+                            <SelectItem value="Library">Library</SelectItem>
+                            <SelectItem value="Guidance">Guidance</SelectItem>
+                            <SelectItem value="Security">Security</SelectItem>
+                            <SelectItem value="Maintenance">Maintenance</SelectItem>
+                            <SelectItem value="Others">Others</SelectItem>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    {errors.departmentAssigned && <p className="text-sm text-red-600">{errors.departmentAssigned}</p>}
+                    
+                    {formData.departmentAssigned === "Others" && (
+                      <div className="mt-2">
+                        <Label htmlFor="customDepartmentAssigned">Enter Correct Department Assigned *</Label>
+                        <Input
+                          id="customDepartmentAssigned"
+                          placeholder="Enter department name"
+                          value={formData.customDepartmentAssigned}
+                          onChange={(e) => handleInputChange("customDepartmentAssigned", e.target.value)}
+                          className={errors.customDepartmentAssigned ? "border-red-500" : ""}
+                        />
+                        {errors.customDepartmentAssigned && <p className="text-sm text-red-600">{errors.customDepartmentAssigned}</p>}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="yearsOfService">Years of Service *</Label>
+                    <Input
+                      id="yearsOfService"
+                      type="number"
+                      placeholder="Enter years of service"
+                      value={formData.yearsOfService}
+                      onChange={(e) => handleInputChange("yearsOfService", e.target.value)}
+                      className={errors.yearsOfService ? "border-red-500" : ""}
+                    />
+                    {errors.yearsOfService && <p className="text-sm text-red-600">{errors.yearsOfService}</p>}
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="education">Educational Background</Label>
+                  <Textarea
+                    id="education"
+                    placeholder="Bachelor of Education, Master of Arts in Education"
+                    value={formData.education}
+                    onChange={(e) => handleInputChange("education", e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="messageToStudents">Message to Students</Label>
+                  <Textarea
+                    id="messageToStudents"
+                    placeholder="Share a message with your students"
+                    value={formData.messageToStudents}
+                    onChange={(e) => handleInputChange("messageToStudents", e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="additionalRoles">Additional Roles & Responsibilities</Label>
+                  <Textarea
+                    id="additionalRoles"
+                    placeholder="Any additional roles or responsibilities"
+                    value={formData.additionalRoles}
+                    onChange={(e) => handleInputChange("additionalRoles", e.target.value)}
+                    rows={3}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Additional Information */}
+            <Card className="border-purple-200 bg-purple-50/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <User className="h-4 w-4 text-purple-600" />
+                  Additional Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bio">Professional Bio</Label>
+                  <Textarea
+                    id="bio"
+                    placeholder="Tell us about your professional background"
+                    value={formData.bio}
+                    onChange={(e) => handleInputChange("bio", e.target.value)}
+                    rows={4}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )
+
+      case "advisory":
+        return (
+          <div className="space-y-6">
+            {/* Profile Picture Upload */}
+            <Card className="p-6">
+              <CardHeader className="px-0 pt-0 pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Heart className="h-5 w-5 text-pink-600" />
+                  Profile Picture
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-0 pb-0 space-y-4">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-6">
+                    {/* Profile Photo Preview */}
+                    <div className="relative w-24 h-24 rounded-full overflow-hidden border-4 border-gray-200">
+                      {profilePhoto ? (
+                        <Image src={profilePhoto} alt="Profile" fill className="object-cover" />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-400">
+                          <User className="h-8 w-8" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Upload Section */}
+                    <div className="flex-1 space-y-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="profilePhoto">Upload Profile Photo</Label>
+                        <div className="flex items-center gap-3">
+                          <Input
+                            id="profilePhoto"
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageUpload}
+                            className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setProfilePhoto("")
+                              handleInputChange("profilePhoto", "")
+                            }}
+                            disabled={!profilePhoto}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <p className="text-sm text-gray-500">
+                          Recommended: Square image, at least 400x400px
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Basic Information */}
+            <Card className="p-6">
+              <CardHeader className="px-0 pt-0 pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <User className="h-5 w-5 text-blue-600" />
+                  Basic Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-0 pb-0 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName">First Name *</Label>
+                    <Input
+                      id="firstName"
+                      placeholder="Enter first name"
+                      value={formData.firstName}
+                      onChange={(e) => handleInputChange("firstName", e.target.value)}
+                      className={errors.firstName ? "border-red-500" : ""}
+                    />
+                    {errors.firstName && <p className="text-sm text-red-600">{errors.firstName}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName">Last Name *</Label>
+                    <Input
+                      id="lastName"
+                      placeholder="Enter last name"
+                      value={formData.lastName}
+                      onChange={(e) => handleInputChange("lastName", e.target.value)}
+                      className={errors.lastName ? "border-red-500" : ""}
+                    />
+                    {errors.lastName && <p className="text-sm text-red-600">{errors.lastName}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="middleName">Middle Name</Label>
+                    <Input
+                      id="middleName"
+                      placeholder="Enter middle name"
+                      value={formData.middleName}
+                      onChange={(e) => handleInputChange("middleName", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="suffix">Suffix</Label>
+                    <Input
+                      id="suffix"
+                      placeholder="e.g., Jr., Sr., III"
+                      value={formData.suffix}
+                      onChange={(e) => handleInputChange("suffix", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="birthday">Birthday *</Label>
+                    <Input
+                      id="birthday"
+                      type="date"
+                      value={formData.birthday}
+                      onChange={(e) => handleInputChange("birthday", e.target.value)}
+                      className={errors.birthday ? "border-red-500" : ""}
+                    />
+                    {errors.birthday && <p className="text-sm text-red-600">{errors.birthday}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="address">Address *</Label>
+                    <Textarea
+                      id="address"
+                      placeholder="Enter complete address"
+                      value={formData.address}
+                      onChange={(e) => handleInputChange("address", e.target.value)}
+                      rows={3}
+                      className={errors.address ? "border-red-500" : ""}
+                    />
+                    {errors.address && <p className="text-sm text-red-600">{errors.address}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email *</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="Enter email address"
+                      value={formData.email}
+                      onChange={(e) => handleInputChange("email", e.target.value)}
+                      className={errors.email ? "border-red-500" : ""}
+                    />
+                    {errors.email && <p className="text-sm text-red-600">{errors.email}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number *</Label>
+                    <Input
+                      id="phone"
+                      placeholder="Enter phone number"
+                      value={formData.phone}
+                      onChange={(e) => handleInputChange("phone", e.target.value)}
+                      className={errors.phone ? "border-red-500" : ""}
+                    />
+                    {errors.phone && <p className="text-sm text-red-600">{errors.phone}</p>}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Professional Information */}
+            <Card className="border-green-200 bg-green-50/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <GraduationCap className="h-4 w-4 text-green-600" />
+                  Professional Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="position">Position/Role *</Label>
+                    <Select
+                      value={formData.position}
+                      onValueChange={(value) => {
+                        handleInputChange("position", value)
+                        handleInputChange("departmentAssigned", "")
+                        handleInputChange("customDepartmentAssigned", "")
+                      }}
+                    >
+                      <SelectTrigger className={errors.position ? "border-red-500" : ""}>
+                        <SelectValue placeholder="Select position/role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Teacher Adviser">Teacher Adviser</SelectItem>
+                        <SelectItem value="Class Adviser">Class Adviser</SelectItem>
+                        <SelectItem value="Subject Teacher">Subject Teacher</SelectItem>
+                        <SelectItem value="Guidance Counselor">Guidance Counselor</SelectItem>
+                        <SelectItem value="Student Affairs Coordinator">Student Affairs Coordinator</SelectItem>
+                        <SelectItem value="Others">Others</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {errors.position && <p className="text-sm text-red-600">{errors.position}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="departmentAssigned">Department Assigned *</Label>
+                    <Select value={formData.departmentAssigned} onValueChange={(value) => {
+                      handleInputChange("departmentAssigned", value)
+                      if (value !== "Others") {
+                        handleInputChange("customDepartmentAssigned", "")
+                      }
+                    }}>
+                      <SelectTrigger className={errors.departmentAssigned ? "border-red-500" : ""}>
+                        <SelectValue placeholder="Select department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Elementary">Elementary</SelectItem>
+                        <SelectItem value="Junior High">Junior High</SelectItem>
+                        <SelectItem value="Senior High">Senior High</SelectItem>
+                        <SelectItem value="College">College</SelectItem>
+                        <SelectItem value="Administration">Administration</SelectItem>
+                        <SelectItem value="Others">Others</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {errors.departmentAssigned && <p className="text-sm text-red-600">{errors.departmentAssigned}</p>}
+                    
+                    {formData.departmentAssigned === "Others" && (
+                      <div className="mt-2">
+                        <Label htmlFor="customDepartmentAssigned">Enter Correct Department Assigned *</Label>
+                        <Input
+                          id="customDepartmentAssigned"
+                          placeholder="Enter department name"
+                          value={formData.customDepartmentAssigned}
+                          onChange={(e) => handleInputChange("customDepartmentAssigned", e.target.value)}
+                          className={errors.customDepartmentAssigned ? "border-red-500" : ""}
+                        />
+                        {errors.customDepartmentAssigned && <p className="text-sm text-red-600">{errors.customDepartmentAssigned}</p>}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="yearsOfService">Years of Service *</Label>
+                    <Input
+                      id="yearsOfService"
+                      type="number"
+                      placeholder="Enter years of service"
+                      value={formData.yearsOfService}
+                      onChange={(e) => handleInputChange("yearsOfService", e.target.value)}
+                      className={errors.yearsOfService ? "border-red-500" : ""}
+                    />
+                    {errors.yearsOfService && <p className="text-sm text-red-600">{errors.yearsOfService}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="courses">Courses Taught</Label>
+                    <Textarea
+                      id="courses"
+                      placeholder="List the courses you teach"
+                      value={formData.courses}
+                      onChange={(e) => handleInputChange("courses", e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="additionalRoles">Additional Roles</Label>
+                    <Textarea
+                      id="additionalRoles"
+                      placeholder="Any additional roles or responsibilities"
+                      value={formData.additionalRoles}
+                      onChange={(e) => handleInputChange("additionalRoles", e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="messageToStudents">Message to Students</Label>
+                    <Textarea
+                      id="messageToStudents"
+                      placeholder="Share a message with your students"
+                      value={formData.messageToStudents}
+                      onChange={(e) => handleInputChange("messageToStudents", e.target.value)}
+                      rows={3}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Advisory Information */}
+            <AdvisoryForm
+              schoolYearId={schoolYearId}
+              formData={{
+                academicDepartment: formData.academicDepartment || "",
+                academicYearLevels: formData.academicYearLevels || "[]",
+                academicCourseProgram: formData.academicCourseProgram || "",
+                academicSections: formData.academicSections || "[]",
+                messageToStudents: formData.messageToStudents || ""
+              }}
+              onInputChange={updateField}
+              errors={errors}
+            />
+
+            {/* Additional Information */}
+            <Card className="border-purple-200 bg-purple-50/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <User className="h-4 w-4 text-purple-600" />
+                  Additional Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="bio">Personal Bio</Label>
+                  <Textarea
+                    id="bio"
+                    placeholder="Tell us about yourself"
+                    value={formData.bio}
+                    onChange={(e) => handleInputChange("bio", e.target.value)}
+                    rows={4}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Social Media */}
+            <Card className="p-6">
+              <CardHeader className="px-0 pt-0 pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Share2 className="h-5 w-5 text-purple-600" />
+                  Social Media (Optional)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-0 pb-0 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="socialMediaFacebook">Facebook</Label>
+                    <Input
+                      id="socialMediaFacebook"
+                      placeholder="@juan.delacruz"
+                      value={formData.socialMediaFacebook}
+                      onChange={(e) => handleInputChange("socialMediaFacebook", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="socialMediaInstagram">Instagram</Label>
+                    <Input
+                      id="socialMediaInstagram"
+                      placeholder="@juandelacruz"
+                      value={formData.socialMediaInstagram}
+                      onChange={(e) => handleInputChange("socialMediaInstagram", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="socialMediaTwitter">Twitter/X</Label>
+                    <Input
+                      id="socialMediaTwitter"
+                      placeholder="@juandelacruz"
+                      value={formData.socialMediaTwitter}
+                      onChange={(e) => handleInputChange("socialMediaTwitter", e.target.value)}
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Yearbook Information */}
+            <Card className="p-6">
+              <CardHeader className="px-0 pt-0 pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Heart className="h-5 w-5 text-pink-600" />
+                  Yearbook Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-0 pb-0 space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="sayingMotto">
+                    Teaching Philosophy/Motto *
+                  </Label>
+                  <Textarea
+                    id="sayingMotto"
+                    placeholder="Share your teaching philosophy or motto"
+                    value={formData.sayingMotto}
+                    onChange={(e) => handleInputChange("sayingMotto", e.target.value)}
+                    rows={2}
+                    className={errors.sayingMotto ? "border-red-500" : ""}
+                  />
+                  {errors.sayingMotto && <p className="text-sm text-red-600">{errors.sayingMotto}</p>}
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="achievements">Achievements/Honors</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={newAchievement}
+                      onChange={(e) => setNewAchievement(e.target.value)}
+                      placeholder="Add an achievement..."
+                      onKeyPress={(e) => e.key === "Enter" && addAchievement()}
+                    />
+                    <Button onClick={addAchievement} size="sm">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {achievements.map((achievement, index) => (
+                      <Badge key={index} variant="secondary" className="flex items-center gap-1">
+                        {achievement}
+                        <X className="h-3 w-3 cursor-pointer" onClick={() => removeAchievement(index)} />
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+          </div>
+        )
+
       default:
         return null
     }
@@ -1551,6 +2245,8 @@ export function CreateManualProfileForm({
               { value: "alumni", label: "Alumni", icon: getRoleIcon("alumni") },
               { value: "staff", label: "Staff", icon: getRoleIcon("staff") },
               { value: "utility", label: "Utility", icon: getRoleIcon("utility") },
+              { value: "ar-sisters", label: "AR Sisters", icon: getRoleIcon("ar-sisters") },
+              { value: "advisory", label: "Advisory", icon: getRoleIcon("advisory") },
             ].map((role) => (
               <Button
                 key={role.value}
@@ -1888,14 +2584,14 @@ export function CreateManualProfileForm({
         <CardContent className="px-0 pb-0 space-y-4">
           <div className="space-y-2">
             <Label htmlFor="sayingMotto">
-              {selectedRole === "faculty" ? "Teaching Philosophy/Motto" : 
+              {selectedRole === "faculty" || selectedRole === "advisory" ? "Teaching Philosophy/Motto" : 
                selectedRole === "staff" || selectedRole === "utility" ? "Motto" : 
                "Motto/Saying"} *
             </Label>
             <Textarea
               id="sayingMotto"
               placeholder={
-                selectedRole === "faculty" ? "Share your teaching philosophy or motto" :
+                selectedRole === "faculty" || selectedRole === "advisory" ? "Share your teaching philosophy or motto" :
                 selectedRole === "staff" || selectedRole === "utility" ? "Share your motto" :
                 "Strive for progress, not perfection"
               }

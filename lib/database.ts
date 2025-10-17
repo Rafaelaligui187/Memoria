@@ -112,6 +112,7 @@ class MockDatabase implements DatabaseConnection {
     alumni: [],
     staff: [],
     utility: [],
+    advisory: [],
   }
   private albums: Album[] = []
   private photos: Photo[] = []

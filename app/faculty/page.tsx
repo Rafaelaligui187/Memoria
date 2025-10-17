@@ -24,6 +24,7 @@ const HIERARCHY_ORDER = {
 }
 
 export default function FacultyPage() {
+  console.log('🎯 Faculty Page Loaded - Hierarchical Structure Active')
   const [authenticated, setAuthenticated] = useState(false)
   const [selectedDepartment, setSelectedDepartment] = useState("All")
   const [selectedSchoolYear, setSelectedSchoolYear] = useState("")
@@ -35,8 +36,9 @@ export default function FacultyPage() {
   const [loadingFaculty, setLoadingFaculty] = useState(true)
 
   // Fixed department options for role-based filtering
-  const departments = [
+  const departmentFilterOptions = [
     "All",
+    "AR Sisters",
     "Faculty", 
     "Staff",
     "Utility"
@@ -152,7 +154,8 @@ export default function FacultyPage() {
   const filteredFaculty = facultyData.filter((faculty) => {
     const matchesDepartment =
       selectedDepartment === "All" ||
-      (selectedDepartment === "Faculty" && faculty.hierarchy === "faculty") ||
+      (selectedDepartment === "AR Sisters" && faculty.isARSister) ||
+      (selectedDepartment === "Faculty" && (faculty.hierarchy === "faculty" || faculty.hierarchy === "department_head" || faculty.hierarchy === "directress" || faculty.hierarchy === "superior")) ||
       (selectedDepartment === "Staff" && faculty.hierarchy === "staff") ||
       (selectedDepartment === "Utility" && faculty.hierarchy === "utility") ||
       faculty.department === selectedDepartment
@@ -168,7 +171,7 @@ export default function FacultyPage() {
     return matchesDepartment && matchesSchoolYear && matchesSearch
   })
 
-  // Group faculty by hierarchy for the new layout
+  // Group faculty by hierarchy for the family tree layout
   const arSisters = filteredFaculty.filter(faculty => faculty.isARSister)
   const departmentHeads = filteredFaculty.filter(faculty => 
     faculty.hierarchy === "department_head" && !faculty.isARSister
@@ -176,9 +179,30 @@ export default function FacultyPage() {
   const regularFaculty = filteredFaculty.filter(faculty => 
     faculty.hierarchy === "faculty" && !faculty.isARSister
   )
-  const allTeachersAndSisters = [...regularFaculty, ...arSisters.filter(sister => 
-    sister.hierarchy !== "directress" && sister.hierarchy !== "superior" && sister.hierarchy !== "department_head"
-  )]
+  const allTeachersAndSisters = [...filteredFaculty]
+
+  // Group faculty by departments for department sections
+  const facultyByDepartment = filteredFaculty.reduce((acc, faculty) => {
+    const department = faculty.department || faculty.departmentAssigned || 'Unassigned'
+    if (!acc[department]) {
+      acc[department] = []
+    }
+    acc[department].push(faculty)
+    return acc
+  }, {} as Record<string, any[]>)
+
+  // Get unique departments (excluding AR Sisters from department grouping)
+  const departments = Object.keys(facultyByDepartment).filter(dept => 
+    dept !== 'Unassigned' && facultyByDepartment[dept].some(f => !f.isARSister)
+  )
+
+  // Debug logging
+  console.log('🏢 Departments found:', departments)
+  console.log('👥 Faculty by department:', facultyByDepartment)
+  console.log('👑 AR Sisters:', arSisters.length, arSisters)
+  console.log('🎓 Department Heads:', departmentHeads.length, departmentHeads)
+  console.log('👨‍🏫 Regular Faculty:', regularFaculty.length)
+  console.log('📊 All Faculty Data:', facultyData)
 
   const sortedFaculty = [...filteredFaculty].sort((a, b) => {
     switch (sortBy) {
@@ -215,6 +239,7 @@ export default function FacultyPage() {
 
             <h1 className="text-5xl md:text-7xl font-bold mb-8 bg-gradient-to-r from-white via-blue-100 to-indigo-200 bg-clip-text text-transparent">
               Faculty & Staff
+              <span className="block text-lg text-yellow-300 mt-2">✨ Hierarchical Structure Active</span>
             </h1>
 
             <p className="text-xl md:text-2xl text-blue-100 max-w-3xl mx-auto mb-12 leading-relaxed">
@@ -259,67 +284,29 @@ export default function FacultyPage() {
           {/* Faculty content */}
           {!loadingFaculty && (
             <>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
-                className="text-center mb-16"
-              >
-                <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-4 py-2 rounded-full mb-6">
-                  <Award className="h-4 w-4" />
-                  <span className="text-sm font-semibold">Our Team</span>
-                </div>
-                <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">Faculty & Staff Directory</h2>
-                <div className="w-24 h-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full mx-auto mb-6"></div>
-                <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-                  Meet our dedicated educators and staff members
-                </p>
-              </motion.div>
+              {selectedDepartment === "All" && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6 }}
+                  className="text-center mb-16"
+                >
+                  <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-4 py-2 rounded-full mb-6">
+                    <Award className="h-4 w-4" />
+                    <span className="text-sm font-semibold">Our Team</span>
+                  </div>
+                  <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-6">Our Leadership</h2>
+                  <div className="w-24 h-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full mx-auto mb-6"></div>
+                  <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+                    Discover our organizational structure and the dedicated Leaders who guide each department
+                  </p>
+                </motion.div>
+              )}
 
-              {/* Filters */}
-              <div className="flex flex-wrap gap-4 mb-8 justify-center">
-                <div className="flex items-center gap-2">
-                  <Filter className="h-5 w-5 text-gray-600" />
-                  <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-                    <SelectTrigger className="w-48 h-12 border-2 border-gray-200 focus:border-blue-500 rounded-xl shadow-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {departments.map((dept) => (
-                        <SelectItem key={dept} value={dept}>
-                          {dept}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <Search className="h-5 w-5 text-gray-600" />
-                  <Input
-                    placeholder="Search faculty..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-64 h-12 border-2 border-gray-200 focus:border-blue-500 rounded-xl shadow-sm"
-                  />
-                </div>
-
-                <Select value={sortBy} onValueChange={(value: "name" | "department" | "hierarchy") => setSortBy(value)}>
-                  <SelectTrigger className="w-full lg:w-48 h-12 border-2 border-gray-200 focus:border-blue-500 rounded-xl shadow-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="hierarchy">Sort by Hierarchy</SelectItem>
-                    <SelectItem value="name">Sort by Name</SelectItem>
-                    <SelectItem value="department">Sort by Department</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {sortedFaculty.length > 0 ? (
-                <div className="space-y-16">
-                  {/* AR Sisters Section */}
-                  {arSisters.length > 0 && (
+              {/* Always show the main layout structure */}
+              <div className="space-y-20">
+                {/* School Leadership Section - AR Sisters */}
+                {arSisters.length > 0 && selectedDepartment === "All" && (
                     <motion.div
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -333,42 +320,43 @@ export default function FacultyPage() {
                       <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-8">School Leadership</h2>
                       <div className="w-24 h-1 bg-gradient-to-r from-purple-600 to-indigo-600 rounded-full mx-auto mb-8"></div>
                       
-                      {/* Primary AR Sister (Directress/Superior) */}
+                      {/* Primary AR Sister (Directress/Superior) - Large card at top */}
                       {arSisters.filter(sister => sister.hierarchy === "directress" || sister.hierarchy === "superior").length > 0 && (
-                        <div className="flex justify-center mb-12">
-                          <div className="max-w-sm">
+                        <div className="flex justify-center items-center mb-12">
+                          <div className="w-full max-w-sm mx-auto">
                             {arSisters.filter(sister => sister.hierarchy === "directress" || sister.hierarchy === "superior").map((sister, index) => (
                               <motion.div
                                 key={sister.id}
                                 initial={{ opacity: 0, y: 30, scale: 0.9 }}
                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                 transition={{ duration: 0.5, delay: index * 0.1 }}
+                                className="flex justify-center"
                               >
-                                <Link href={`/faculty/${sister.id}`}>
-                                  <Card className="group overflow-hidden hover:shadow-2xl transition-all duration-700 bg-white border-2 border-gray-100 hover:border-purple-300 transform hover:-translate-y-2">
+                                <Link href={sister.isARSister ? `/ar-sisters/${sister.id}` : `/faculty/${sister.id}`}>
+                                  <Card className="group overflow-hidden hover:shadow-2xl transition-all duration-700 bg-white border-2 border-red-200 hover:border-red-400 transform hover:-translate-y-2 w-full max-w-md shadow-lg">
                                     <div className="relative overflow-hidden">
                                       <div className="aspect-square overflow-hidden">
                                         <Image
                                           src={sister.image || "/placeholder.svg"}
                                           alt={sister.name}
-                                          width={300}
-                                          height={300}
+                                          width={400}
+                                          height={400}
                                           className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                                         />
                                       </div>
-                                      <div className="absolute top-3 right-3">
-                                        <Badge className="bg-gradient-to-r from-purple-500 to-indigo-500 text-white border-0 px-3 py-1 text-xs font-bold shadow-lg">
+                                      <div className="absolute top-4 right-4">
+                                        <Badge className="bg-gradient-to-r from-red-500 to-red-600 text-white border-0 px-4 py-2 text-sm font-bold shadow-lg">
                                           {sister.position}
                                         </Badge>
                                       </div>
                                     </div>
-                                    <CardContent className="p-6 text-center">
-                                      <h3 className="font-bold text-xl text-gray-900 mb-2 group-hover:text-purple-600 transition-colors">
+                                    <CardContent className="p-8 text-center">
+                                      <h3 className="font-bold text-2xl text-gray-900 mb-3 group-hover:text-red-600 transition-colors">
                                         {sister.name}
                                       </h3>
-                                      <p className="text-purple-600 font-semibold text-sm mb-2">{sister.position}</p>
-                                      <div className="flex items-center justify-center gap-1 text-gray-500 text-sm">
-                                        <Star className="h-3 w-3 text-yellow-500" />
+                                      <p className="text-red-600 font-semibold text-base mb-3">{sister.position}</p>
+                                      <div className="flex items-center justify-center gap-2 text-gray-500 text-base">
+                                        <Star className="h-4 w-4 text-yellow-500" />
                                         <span>{sister.yearsOfService} years of excellence</span>
                                       </div>
                                     </CardContent>
@@ -380,7 +368,14 @@ export default function FacultyPage() {
                         </div>
                       )}
 
-                      {/* Secondary AR Sisters */}
+                      {/* Purple connecting line */}
+                      {arSisters.filter(sister => sister.hierarchy !== "directress" && sister.hierarchy !== "superior").length > 0 && (
+                        <div className="flex justify-center mb-8">
+                          <div className="w-1 h-8 bg-gradient-to-b from-purple-500 to-purple-400 rounded-full"></div>
+                        </div>
+                      )}
+
+                      {/* Secondary AR Sisters - Horizontal row */}
                       {arSisters.filter(sister => sister.hierarchy !== "directress" && sister.hierarchy !== "superior").length > 0 && (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                           {arSisters.filter(sister => sister.hierarchy !== "directress" && sister.hierarchy !== "superior").map((sister, index) => (
@@ -390,7 +385,7 @@ export default function FacultyPage() {
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               transition={{ duration: 0.5, delay: index * 0.05 }}
                             >
-                              <Link href={`/faculty/${sister.id}`}>
+                              <Link href={sister.isARSister ? `/ar-sisters/${sister.id}` : `/faculty/${sister.id}`}>
                                 <Card className="group overflow-hidden hover:shadow-2xl transition-all duration-700 h-full bg-white border-2 border-gray-100 hover:border-purple-300 transform hover:-translate-y-2">
                                   <div className="relative overflow-hidden">
                                     <div className="aspect-square overflow-hidden">
@@ -427,161 +422,304 @@ export default function FacultyPage() {
                     </motion.div>
                   )}
 
-                  {/* Department Heads and Teachers Section */}
-                  {(departmentHeads.length > 0 || regularFaculty.length > 0) && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.6, delay: 0.2 }}
-                      className="text-center"
-                    >
-                      <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-4 py-2 rounded-full mb-6">
-                        <Award className="h-4 w-4" />
-                        <span className="text-sm font-semibold">Department Faculty</span>
-                      </div>
-                      <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-8">Department Teachers & Heads</h2>
-                      <div className="w-24 h-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full mx-auto mb-8"></div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {[...departmentHeads, ...regularFaculty].map((faculty, index) => (
-                          <motion.div
-                            key={faculty.id}
-                            initial={{ opacity: 0, y: 30, scale: 0.9 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            transition={{ duration: 0.5, delay: index * 0.05 }}
-                          >
-                            <Link href={`/faculty/${faculty.id}`}>
-                              <Card className="group overflow-hidden hover:shadow-2xl transition-all duration-700 h-full bg-white border-2 border-gray-100 hover:border-blue-300 transform hover:-translate-y-2">
-                                <div className="relative overflow-hidden">
-                                  <div className="aspect-square overflow-hidden">
-                                    <Image
-                                      src={faculty.image || "/placeholder.svg"}
-                                      alt={faculty.name}
-                                      width={200}
-                                      height={200}
-                                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                                    />
-                                  </div>
-                                  <div className="absolute top-3 right-3">
-                                    <Badge className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-0 px-3 py-1 text-xs font-bold shadow-lg">
-                                      {faculty.position}
-                                    </Badge>
-                                  </div>
-                                </div>
-                                <CardContent className="p-4 text-center">
-                                  <h3 className="font-bold text-lg text-gray-900 mb-2 group-hover:text-blue-600 transition-colors line-clamp-2">
-                                    {faculty.name}
-                                  </h3>
-                                  <p className="text-blue-600 font-semibold text-sm mb-2 line-clamp-1">{faculty.position}</p>
-                                  <p className="text-gray-600 text-sm mb-3 line-clamp-1">
-                                    {faculty.department || faculty.departmentAssigned || 'Department Not Assigned'}
-                                  </p>
-                                  <div className="flex items-center justify-center gap-1 text-gray-500 text-sm">
-                                    <Star className="h-3 w-3 text-yellow-500" />
-                                    <span>{faculty.yearsOfService} years</span>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            </Link>
-                          </motion.div>
-                        ))}
-                      </div>
-                    </motion.div>
+                  {/* Visual Separator */}
+                  {arSisters.length > 0 && departments.length > 0 && selectedDepartment === "All" && (
+                    <div className="flex justify-center my-16">
+                      <div className="w-32 h-1 bg-gradient-to-r from-purple-500 via-blue-500 to-indigo-500 rounded-full"></div>
+                    </div>
                   )}
 
-                  {/* All Teachers and Sisters Section */}
-                  {allTeachersAndSisters.length > 0 && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.6, delay: 0.4 }}
-                      className="text-center"
-                    >
+                  {/* Department Sections */}
+                  {departments.length > 0 && selectedDepartment === "All" ? (
+                    departments.map((department, deptIndex) => {
+                      const deptFaculty = facultyByDepartment[department].filter(f => !f.isARSister)
+                      const deptHead = deptFaculty.find(f => f.hierarchy === "department_head")
+                      const deptTeachers = deptFaculty.filter(f => f.hierarchy === "faculty")
+                      
+                      console.log(`📚 Department: ${department}`, {
+                        totalFaculty: deptFaculty.length,
+                        departmentHead: deptHead?.name || 'None',
+                        teachers: deptTeachers.length
+                      })
+                      
+                      if (deptFaculty.length === 0) return null
+
+                      return (
+                        <motion.div
+                          key={department}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.6, delay: 0.2 + deptIndex * 0.1 }}
+                          className="text-center mb-16"
+                        >
+                          <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-800 px-4 py-2 rounded-full mb-6">
+                            <GraduationCap className="h-4 w-4" />
+                            <span className="text-sm font-semibold">{department}</span>
+                          </div>
+                          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-8">{department}</h2>
+                          <div className="w-24 h-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full mx-auto mb-8"></div>
+                        
+                        {/* Department Head - Large card at center-top */}
+                        {deptHead && (
+                          <div className="flex justify-center items-center mb-12">
+                            <div className="w-full max-w-sm mx-auto">
+                              <motion.div
+                                initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                transition={{ duration: 0.5, delay: deptIndex * 0.1 }}
+                                className="flex justify-center"
+                              >
+                                <Link href={`/faculty/${deptHead.id}`}>
+                                  <Card className="group overflow-hidden hover:shadow-2xl transition-all duration-700 bg-white border-2 border-red-200 hover:border-red-400 transform hover:-translate-y-2 w-full max-w-md shadow-lg">
+                                    <div className="relative overflow-hidden">
+                                      <div className="aspect-square overflow-hidden">
+                                        <Image
+                                          src={deptHead.image || "/placeholder.svg"}
+                                          alt={deptHead.name}
+                                          width={400}
+                                          height={400}
+                                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                        />
+                                      </div>
+                                      <div className="absolute top-4 right-4">
+                                        <Badge className="bg-gradient-to-r from-red-500 to-red-600 text-white border-0 px-4 py-2 text-sm font-bold shadow-lg">
+                                          {deptHead.position}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                    <CardContent className="p-8 text-center">
+                                      <h3 className="font-bold text-2xl text-gray-900 mb-3 group-hover:text-red-600 transition-colors">
+                                        {deptHead.name}
+                                      </h3>
+                                      <p className="text-red-600 font-semibold text-base mb-3">{deptHead.position}</p>
+                                      <div className="flex items-center justify-center gap-2 text-gray-500 text-base">
+                                        <Star className="h-4 w-4 text-yellow-500" />
+                                        <span>{deptHead.yearsOfService} years of excellence</span>
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                </Link>
+                              </motion.div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Purple connecting line */}
+                        {deptTeachers.length > 0 && (
+                          <div className="flex justify-center mb-8">
+                            <div className="w-1 h-8 bg-gradient-to-b from-purple-500 to-purple-400 rounded-full"></div>
+                          </div>
+                        )}
+
+                        {/* Department Teachers - Grid layout */}
+                        {deptTeachers.length > 0 && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                            {deptTeachers.map((teacher, index) => (
+                              <motion.div
+                                key={teacher.id}
+                                initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                transition={{ duration: 0.5, delay: deptIndex * 0.1 + index * 0.05 }}
+                              >
+                                <Link href={`/faculty/${teacher.id}`}>
+                                  <Card className="group overflow-hidden hover:shadow-2xl transition-all duration-700 h-full bg-white border-2 border-gray-100 hover:border-blue-300 transform hover:-translate-y-2">
+                                    <div className="relative overflow-hidden">
+                                      <div className="aspect-square overflow-hidden">
+                                        <Image
+                                          src={teacher.image || "/placeholder.svg"}
+                                          alt={teacher.name}
+                                          width={200}
+                                          height={200}
+                                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                        />
+                                      </div>
+                                      <div className="absolute top-3 right-3">
+                                        <Badge className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-0 px-3 py-1 text-xs font-bold shadow-lg">
+                                          {teacher.position}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                    <CardContent className="p-4 text-center">
+                                      <h3 className="font-bold text-lg text-gray-900 mb-2 group-hover:text-blue-600 transition-colors line-clamp-2">
+                                        {teacher.name}
+                                      </h3>
+                                      <p className="text-blue-600 font-semibold text-sm mb-2 line-clamp-1">{teacher.position}</p>
+                                      <div className="flex items-center justify-center gap-1 text-gray-500 text-sm">
+                                        <Star className="h-3 w-3 text-yellow-500" />
+                                        <span>{teacher.yearsOfService} years</span>
+                                      </div>
+                                    </CardContent>
+                                  </Card>
+                                </Link>
+                              </motion.div>
+                            ))}
+                          </div>
+                        )}
+                      </motion.div>
+                    )
+                  })
+                  ) : (
+                    selectedDepartment === "All" && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6, delay: 0.2 }}
+                        className="text-center py-16"
+                      >
+                        <div className="bg-gradient-to-br from-gray-100 to-gray-200 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-8">
+                          <GraduationCap className="h-10 w-10 text-gray-400" />
+                        </div>
+                        <h3 className="text-2xl font-bold text-gray-900 mb-4">No Departments Found</h3>
+                        <p className="text-gray-600 mb-8 max-w-md mx-auto">
+                          No department sections are available. Faculty members may not be assigned to specific departments yet.
+                        </p>
+                      </motion.div>
+                    )
+                  )}
+
+                  {/* Visual Separator */}
+                  {(departments.length > 0 || arSisters.length > 0) && allTeachersAndSisters.length > 0 && selectedDepartment === "All" && (
+                    <div className="flex justify-center my-16">
+                      <div className="w-32 h-1 bg-gradient-to-r from-blue-500 via-green-500 to-emerald-500 rounded-full"></div>
+                    </div>
+                  )}
+
+                {/* All Teachers & Sisters Section - Always show */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.4 }}
+                  className="text-center"
+                >
                       <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-4 py-2 rounded-full mb-6">
                         <Users className="h-4 w-4" />
-                        <span className="text-sm font-semibold">All Team Members</span>
+                        <span className="text-sm font-semibold">
+                          {selectedDepartment === "All" ? "Complete Directory" : selectedDepartment}
+                        </span>
                       </div>
-                      <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">All Teachers & Sisters</h2>
+                      <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+                        {selectedDepartment === "All" ? "All Team Members" : `${selectedDepartment} Members`}
+                      </h2>
                       <p className="text-gray-600 mb-8">{allTeachersAndSisters.length} dedicated professionals for {schoolYears.find(year => year._id === selectedSchoolYear)?.yearLabel || 'current year'}</p>
                       <div className="w-24 h-1 bg-gradient-to-r from-green-600 to-emerald-600 rounded-full mx-auto mb-8"></div>
                       
+                      {/* Filters */}
+                      <div className="flex flex-wrap gap-4 mb-8 justify-center">
+                        <div className="flex items-center gap-2">
+                          <Filter className="h-5 w-5 text-gray-600" />
+                          <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
+                            <SelectTrigger className="w-48 h-12 border-2 border-gray-200 focus:border-blue-500 rounded-xl shadow-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {departmentFilterOptions.map((dept) => (
+                                <SelectItem key={dept} value={dept}>
+                                  {dept}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <Search className="h-5 w-5 text-gray-600" />
+                          <Input
+                            placeholder="Search faculty..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-64 h-12 border-2 border-gray-200 focus:border-blue-500 rounded-xl shadow-sm"
+                          />
+                        </div>
+
+                        <Select value={sortBy} onValueChange={(value: "name" | "department" | "hierarchy") => setSortBy(value)}>
+                          <SelectTrigger className="w-full lg:w-48 h-12 border-2 border-gray-200 focus:border-blue-500 rounded-xl shadow-sm">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="hierarchy">Sort by Hierarchy</SelectItem>
+                            <SelectItem value="name">Sort by Name</SelectItem>
+                            <SelectItem value="department">Sort by Department</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {allTeachersAndSisters.map((faculty, index) => (
-                          <motion.div
-                            key={faculty.id}
-                            initial={{ opacity: 0, y: 30, scale: 0.9 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            transition={{ duration: 0.5, delay: index * 0.05 }}
-                          >
-                            <Link href={`/faculty/${faculty.id}`}>
-                              <Card className="group overflow-hidden hover:shadow-2xl transition-all duration-700 h-full bg-white border-2 border-gray-100 hover:border-green-300 transform hover:-translate-y-2">
-                                <div className="relative overflow-hidden">
-                                  <div className="aspect-square overflow-hidden">
-                                    <Image
-                                      src={faculty.image || "/placeholder.svg"}
-                                      alt={faculty.name}
-                                      width={200}
-                                      height={200}
-                                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                                    />
-                                  </div>
-                                  <div className="absolute top-3 right-3">
-                                    <Badge className={`${
-                                      faculty.isARSister 
-                                        ? "bg-gradient-to-r from-purple-500 to-indigo-500" 
-                                        : "bg-gradient-to-r from-green-500 to-emerald-500"
-                                    } text-white border-0 px-3 py-1 text-xs font-bold shadow-lg`}>
-                                      {faculty.position}
-                                    </Badge>
-                                  </div>
-                                </div>
-                                <CardContent className="p-4 text-center">
-                                  <h3 className="font-bold text-lg text-gray-900 mb-2 group-hover:text-green-600 transition-colors line-clamp-2">
-                                    {faculty.name}
-                                  </h3>
-                                  <p className="text-green-600 font-semibold text-sm mb-2 line-clamp-1">{faculty.position}</p>
-                                  <p className="text-gray-600 text-sm mb-3 line-clamp-1">
-                                    {faculty.department || faculty.departmentAssigned || 'Department Not Assigned'}
-                                  </p>
-                                  <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-1 text-gray-500 text-sm">
-                                      <Star className="h-3 w-3 text-yellow-500" />
-                                      <span>{faculty.yearsOfService} years</span>
+                        {allTeachersAndSisters.length > 0 ? (
+                          allTeachersAndSisters.map((faculty, index) => (
+                            <motion.div
+                              key={faculty.id}
+                              initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              transition={{ duration: 0.5, delay: index * 0.05 }}
+                            >
+                              <Link href={`/faculty/${faculty.id}`}>
+                                <Card className="group overflow-hidden hover:shadow-2xl transition-all duration-700 h-full bg-white border-2 border-gray-100 hover:border-green-300 transform hover:-translate-y-2">
+                                  <div className="relative overflow-hidden">
+                                    <div className="aspect-square overflow-hidden">
+                                      <Image
+                                        src={faculty.image || "/placeholder.svg"}
+                                        alt={faculty.name}
+                                        width={200}
+                                        height={200}
+                                        className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                      />
                                     </div>
-                                    {faculty.featured && (
-                                      <Badge className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1">⭐ Featured</Badge>
-                                    )}
+                                    <div className="absolute top-3 right-3">
+                                      <Badge className={`${
+                                        faculty.isARSister 
+                                          ? "bg-gradient-to-r from-purple-500 to-indigo-500" 
+                                          : "bg-gradient-to-r from-green-500 to-emerald-500"
+                                      } text-white border-0 px-3 py-1 text-xs font-bold shadow-lg`}>
+                                        {faculty.position}
+                                      </Badge>
+                                    </div>
                                   </div>
-                                </CardContent>
-                              </Card>
-                            </Link>
-                          </motion.div>
-                        ))}
+                                  <CardContent className="p-4 text-center">
+                                    <h3 className="font-bold text-lg text-gray-900 mb-2 group-hover:text-green-600 transition-colors line-clamp-2">
+                                      {faculty.name}
+                                    </h3>
+                                    <p className="text-green-600 font-semibold text-sm mb-2 line-clamp-1">{faculty.position}</p>
+                                    <p className="text-gray-600 text-sm mb-3 line-clamp-1">
+                                      {faculty.department || faculty.departmentAssigned || 'Department Not Assigned'}
+                                    </p>
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-1 text-gray-500 text-sm">
+                                        <Star className="h-3 w-3 text-yellow-500" />
+                                        <span>{faculty.yearsOfService} years</span>
+                                      </div>
+                                      {faculty.featured && (
+                                        <Badge className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1">⭐ Featured</Badge>
+                                      )}
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              </Link>
+                            </motion.div>
+                          ))
+                        ) : (
+                          <div className="col-span-full text-center py-20">
+                            <div className="bg-gradient-to-br from-gray-100 to-gray-200 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-8">
+                              <Users className="h-10 w-10 text-gray-400" />
+                            </div>
+                            <h3 className="text-2xl font-bold text-gray-900 mb-4">No team members found</h3>
+                            <p className="text-gray-600 mb-8 max-w-md mx-auto">
+                              We couldn't find any faculty or staff matching your current search and filter criteria.
+                            </p>
+                            <Button
+                              onClick={() => {
+                                setSelectedDepartment("All")
+                                setSelectedSchoolYear("")
+                                setSearchQuery("")
+                              }}
+                              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+                            >
+                              Clear All Filters
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </motion.div>
-                  )}
                 </div>
-              ) : (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="text-center py-20">
-                  <div className="bg-gradient-to-br from-gray-100 to-gray-200 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-8">
-                    <Users className="h-10 w-10 text-gray-400" />
-                  </div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-4">No team members found</h3>
-                  <p className="text-gray-600 mb-8 max-w-md mx-auto">
-                    We couldn't find any faculty or staff matching your current search and filter criteria.
-                  </p>
-                  <Button
-                    onClick={() => {
-                      setSelectedDepartment("All")
-                      setSelectedSchoolYear("")
-                      setSearchQuery("")
-                    }}
-                    className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-8 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-                  >
-                    Clear All Filters
-                  </Button>
-                </motion.div>
-              )}
             </>
           )}
         </div>

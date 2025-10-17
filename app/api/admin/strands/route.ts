@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { MongoClient, ObjectId } from "mongodb"
+import { adminNotificationService } from "@/lib/admin-notification-service"
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://aliguirafael:group8@cluster0.ofoka.mongodb.net/Memoria?retryWrites=true&w=majority"
 
@@ -116,6 +117,20 @@ export async function POST(request: NextRequest) {
     
     // Insert the strand
     const result = await collection.insertOne(strandData)
+    
+    // Create notification for all users about new strand
+    try {
+      await adminNotificationService.notifyNewStrand({
+        name: strandData.name,
+        fullName: strandData.fullName,
+        department: strandData.department,
+        schoolYear: strandData.schoolYear
+      })
+      console.log('[Strands API] Notification created for new strand')
+    } catch (notificationError) {
+      console.error('[Strands API] Failed to create notification:', notificationError)
+      // Don't fail the strand creation if notification fails
+    }
     
     return NextResponse.json({
       success: true,

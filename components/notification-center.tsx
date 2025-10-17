@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/auth-context"
 import {
   Bell,
   BellRing,
@@ -45,12 +46,14 @@ export function NotificationCenter() {
   const [unreadCount, setUnreadCount] = useState(0)
   const [urgentCount, setUrgentCount] = useState(0)
   const { toast } = useToast()
+  const { user } = useAuth()
 
   // Fetch notifications from API
   const fetchNotifications = async () => {
     try {
       setLoading(true)
-      const response = await fetch('/api/admin/notifications?limit=50')
+      const adminEmail = user?.email ? encodeURIComponent(user.email) : ''
+      const response = await fetch(`/api/admin/notifications?limit=50&adminEmail=${adminEmail}`)
       const result = await response.json()
       
       if (result.success) {
@@ -241,7 +244,7 @@ export function NotificationCenter() {
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80">
+      <DropdownMenuContent align="end" className="w-96">
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="font-semibold">Notifications</h3>
           <div className="flex items-center gap-2">

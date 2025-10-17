@@ -28,7 +28,7 @@ interface ProfileSubmission {
   userId: string
   userName: string
   userEmail: string
-  role: "Student" | "Faculty" | "Alumni" | "Staff" | "Utility"
+  role: "Student" | "Faculty" | "Alumni" | "Staff" | "Utility" | "AR Sisters"
   department: string
   status: "pending" | "approved" | "rejected"
   submittedAt: string
@@ -74,6 +74,15 @@ interface ProfileSubmission {
 
     // Staff fields
     officeAssigned?: string
+
+    // AR Sisters fields
+    religiousOrder?: string
+    vowsDate?: string
+    specialization?: string
+    education?: string
+    publications?: string
+    research?: string
+    classesHandled?: string
 
     // Alumni career fields
     currentProfession?: string
@@ -128,7 +137,7 @@ export function ProfileApprovalSystem({ selectedYear, selectedYearLabel }: Profi
           userId: account.id,
           userName: account.name,
           userEmail: account.email,
-          role: account.role as "Student" | "Faculty" | "Alumni" | "Staff" | "Utility",
+          role: account.role as "Student" | "Faculty" | "Alumni" | "Staff" | "Utility" | "AR Sisters",
           department: account.department,
           status: account.profileStatus || "pending",
           submittedAt: account.createdAt,
@@ -449,6 +458,7 @@ export function ProfileApprovalSystem({ selectedYear, selectedYearLabel }: Profi
                 <SelectItem value="Alumni">Alumni</SelectItem>
                 <SelectItem value="Staff">Staff</SelectItem>
                 <SelectItem value="Utility">Utility</SelectItem>
+                <SelectItem value="AR Sisters">AR Sisters</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -862,6 +872,80 @@ export function ProfileApprovalSystem({ selectedYear, selectedYearLabel }: Profi
                           </div>
                         )}
                       </div>
+                    </div>
+                  )}
+
+                  {/* AR Sisters Religious & Professional Info */}
+                  {selectedSubmission.role === "AR Sisters" && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {selectedSubmission.profileData.religiousOrder && (
+                          <div>
+                            <Label className="text-sm font-medium">Religious Order</Label>
+                            <p className="text-sm mt-1">{selectedSubmission.profileData.religiousOrder}</p>
+                          </div>
+                        )}
+                        {selectedSubmission.profileData.vowsDate && (
+                          <div>
+                            <Label className="text-sm font-medium">Date of Vows</Label>
+                            <p className="text-sm mt-1">{new Date(selectedSubmission.profileData.vowsDate).toLocaleDateString()}</p>
+                          </div>
+                        )}
+                        {selectedSubmission.profileData.position && (
+                          <div>
+                            <Label className="text-sm font-medium">Position</Label>
+                            <p className="text-sm mt-1">{selectedSubmission.profileData.position}</p>
+                          </div>
+                        )}
+                        {selectedSubmission.profileData.departmentAssigned && (
+                          <div>
+                            <Label className="text-sm font-medium">Department Assigned</Label>
+                            <p className="text-sm mt-1">{selectedSubmission.profileData.departmentAssigned}</p>
+                          </div>
+                        )}
+                        {selectedSubmission.profileData.yearsOfService && (
+                          <div>
+                            <Label className="text-sm font-medium">Years of Service</Label>
+                            <p className="text-sm mt-1">{selectedSubmission.profileData.yearsOfService}</p>
+                          </div>
+                        )}
+                        {selectedSubmission.profileData.specialization && (
+                          <div>
+                            <Label className="text-sm font-medium">Specialization</Label>
+                            <p className="text-sm mt-1">{selectedSubmission.profileData.specialization}</p>
+                          </div>
+                        )}
+                      </div>
+                      {selectedSubmission.profileData.education && (
+                        <div>
+                          <Label className="text-sm font-medium">Educational Background</Label>
+                          <p className="text-sm mt-1">{selectedSubmission.profileData.education}</p>
+                        </div>
+                      )}
+                      {selectedSubmission.profileData.messageToStudents && (
+                        <div>
+                          <Label className="text-sm font-medium">Message to Students</Label>
+                          <p className="text-sm mt-1 italic">"{selectedSubmission.profileData.messageToStudents}"</p>
+                        </div>
+                      )}
+                      {selectedSubmission.profileData.publications && (
+                        <div>
+                          <Label className="text-sm font-medium">Publications</Label>
+                          <p className="text-sm mt-1">{selectedSubmission.profileData.publications}</p>
+                        </div>
+                      )}
+                      {selectedSubmission.profileData.research && (
+                        <div>
+                          <Label className="text-sm font-medium">Research Interests</Label>
+                          <p className="text-sm mt-1">{selectedSubmission.profileData.research}</p>
+                        </div>
+                      )}
+                      {selectedSubmission.profileData.classesHandled && (
+                        <div>
+                          <Label className="text-sm font-medium">Classes Handled</Label>
+                          <p className="text-sm mt-1">{selectedSubmission.profileData.classesHandled}</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </TabsContent>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -19,7 +19,7 @@ interface ProfileSetupDialogProps {
   isEditing?: boolean
 }
 
-type UserRole = "student" | "faculty" | "alumni" | "staff" | "utility"
+type UserRole = "student" | "faculty" | "alumni" | "staff" | "utility" | "ar-sisters"
 
 export function ProfileSetupDialog({ open, onOpenChange, schoolYearId, isEditing = false }: ProfileSetupDialogProps) {
   const [selectedRole, setSelectedRole] = useState<UserRole>("student")
@@ -28,6 +28,12 @@ export function ProfileSetupDialog({ open, onOpenChange, schoolYearId, isEditing
   const [newAchievement, setNewAchievement] = useState("")
   const [newActivity, setNewActivity] = useState("")
   const [showOtherSection, setShowOtherSection] = useState(false)
+  
+  // Academic Information state for faculty
+  const [availableAcademicYearLevels, setAvailableAcademicYearLevels] = useState<string[]>([])
+  const [availableAcademicPrograms, setAvailableAcademicPrograms] = useState<string[]>([])
+  const [availableAcademicSections, setAvailableAcademicSections] = useState<{name: string, yearLevel: string}[]>([])
+  const [departmentData, setDepartmentData] = useState<any>(null)
   const [formData, setFormData] = useState({
     fullName: "",
     nickname: "",
@@ -56,6 +62,24 @@ export function ProfileSetupDialog({ open, onOpenChange, schoolYearId, isEditing
     location: "",
     advice: "",
     contribution: "",
+    // AR Sisters specific fields
+    vowsDate: "",
+    customPosition: "",
+    specialization: "",
+    education: "",
+    publications: "",
+    research: "",
+    classesHandled: "",
+    departmentAssigned: "",
+    customDepartmentAssigned: "",
+    courses: "",
+    additionalRoles: "",
+    
+    // Faculty Academic Information (optional for advisory roles)
+    academicDepartment: "",
+    academicYearLevels: [],
+    academicCourseProgram: "",
+    academicSections: [],
   })
 
   // Get school year label for display
@@ -64,7 +88,7 @@ export function ProfileSetupDialog({ open, onOpenChange, schoolYearId, isEditing
     return yearId.replace("-", "–")
   }
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: string | string[]) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     
     // Detect officer role selection
@@ -98,6 +122,153 @@ export function ProfileSetupDialog({ open, onOpenChange, schoolYearId, isEditing
       }
     }
   }
+
+  // Fetch dynamic form data
+  useEffect(() => {
+    const fetchFormData = async () => {
+      try {
+        const response = await fetch(`/api/admin/form-data?schoolYearId=${schoolYearId}`)
+        const result = await response.json()
+        
+        if (result.success) {
+          setDepartmentData(result.data.departments)
+          console.log('Dynamic form data loaded for profile dialog:', result.data.departments)
+        } else {
+          console.error('Failed to fetch form data:', result.error)
+          // Fallback to hardcoded data
+          setDepartmentData({
+            "Elementary": {
+              yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
+              programs: ["Elementary"],
+              sections: ["Section A", "Section B", "Section C", "Section D"],
+            },
+            "Junior High": {
+              yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
+              programs: ["Junior High"],
+              sections: ["Section A", "Section B", "Section C", "Section D"],
+            },
+            "Senior High": {
+              yearLevels: ["Grade 11", "Grade 12"],
+              programs: ["STEM", "ABM", "HUMSS", "GAS", "TVL"],
+              sections: ["Section A", "Section B", "Section C", "Section D"],
+            },
+            "College": {
+              yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
+              programs: ["BSIT", "BSCS", "BSIS", "BSA", "BSBA"],
+              sections: ["Section A", "Section B", "Section C", "Section D"],
+            },
+          })
+        }
+      } catch (error) {
+        console.error('Error fetching form data:', error)
+        // Fallback to hardcoded data
+        setDepartmentData({
+          "Elementary": {
+            yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
+            programs: ["Elementary"],
+            sections: ["Section A", "Section B", "Section C", "Section D"],
+          },
+          "Junior High": {
+            yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
+            programs: ["Junior High"],
+            sections: ["Section A", "Section B", "Section C", "Section D"],
+          },
+          "Senior High": {
+            yearLevels: ["Grade 11", "Grade 12"],
+            programs: ["STEM", "ABM", "HUMSS", "GAS", "TVL"],
+            sections: ["Section A", "Section B", "Section C", "Section D"],
+          },
+          "College": {
+            yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
+            programs: ["BSIT", "BSCS", "BSIS", "BSA", "BSBA"],
+            sections: ["Section A", "Section B", "Section C", "Section D"],
+          },
+        })
+      }
+    }
+
+    if (schoolYearId) {
+      fetchFormData()
+    }
+  }, [schoolYearId])
+
+  // Academic Information dynamic dropdown logic for faculty
+  useEffect(() => {
+    if (departmentData && formData.academicDepartment && departmentData[formData.academicDepartment]) {
+      const deptData = departmentData[formData.academicDepartment]
+      setAvailableAcademicYearLevels(deptData.yearLevels || [])
+      setAvailableAcademicPrograms(deptData.programs || [])
+      
+      // Reset dependent fields when department changes
+      handleInputChange("academicYearLevels", [])
+      handleInputChange("academicCourseProgram", "")
+      handleInputChange("academicSections", [])
+      setAvailableAcademicSections([]) // Clear sections initially
+    }
+  }, [formData.academicDepartment, departmentData])
+
+  // Fetch filtered academic sections when course/program and year levels are selected
+  useEffect(() => {
+    const fetchFilteredAcademicSections = async () => {
+      if (formData.academicDepartment && formData.academicCourseProgram && formData.academicYearLevels?.length > 0) {
+        try {
+          // Make multiple API calls for each selected year level
+          const sectionPromises = formData.academicYearLevels.map(async (yearLevel) => {
+            const params = new URLSearchParams({
+              schoolYearId: schoolYearId || "",
+              department: formData.academicDepartment,
+              program: formData.academicCourseProgram,
+              yearLevel: yearLevel
+            })
+            
+            const response = await fetch(`/api/admin/form-data?${params}`)
+            const result = await response.json()
+            
+            if (result.success) {
+              // Return sections with their year level information
+              return (result.data.sections || []).map((section: string) => ({
+                name: section,
+                yearLevel: yearLevel
+              }))
+            }
+            return []
+          })
+          
+          // Wait for all API calls to complete
+          const sectionResults = await Promise.all(sectionPromises)
+          
+          // Combine sections from all year levels
+          const allSections = sectionResults.flat()
+          
+          setAvailableAcademicSections(allSections)
+          console.log(`Filtered academic sections for ${formData.academicDepartment} - ${formData.academicCourseProgram} - ${formData.academicYearLevels}:`, allSections)
+          
+          // Reset academic sections if current selections are not available
+          if (formData.academicSections?.length > 0) {
+            const availableSectionKeys = allSections.map(s => `${s.name}-${s.yearLevel}`)
+            const validSections = formData.academicSections.filter((section: string) => 
+              availableSectionKeys.includes(section)
+            )
+            if (validSections.length !== formData.academicSections.length) {
+              handleInputChange("academicSections", validSections)
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching filtered academic sections:', error)
+        }
+      } else {
+        // If not all required fields are selected, clear sections
+        setAvailableAcademicSections([])
+        if (formData.academicSections?.length > 0) {
+          handleInputChange("academicSections", [])
+        }
+      }
+    }
+
+    if (schoolYearId) {
+      fetchFilteredAcademicSections()
+    }
+  }, [formData.academicDepartment, formData.academicCourseProgram, formData.academicYearLevels, schoolYearId])
 
   const handleSectionBlockChange = (value: string) => {
     setFormData((prev) => ({ ...prev, sectionBlock: value }))
@@ -513,6 +684,147 @@ export function ProfileSetupDialog({ open, onOpenChange, schoolYearId, isEditing
                 </div>
               </CardContent>
             </Card>
+
+            {/* Academic Information - Faculty (Optional for Advisory Roles) */}
+            <Card className="border-green-200 bg-green-50/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <GraduationCap className="h-4 w-4 text-green-600" />
+                  Academic Information (Optional)
+                  <span className="text-sm font-normal text-gray-500">
+                    - Fill this section if you serve as an adviser
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <div className="flex items-start gap-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                    <div className="text-sm text-blue-800">
+                      <p className="font-medium mb-1">Advisory Role Information</p>
+                      <p>If you select academic information below, your profile will automatically appear as an adviser on the respective Yearbook pages. You can select multiple sections and year levels if you handle multiple advisories.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="academicDepartment">Department</Label>
+                    <Select 
+                      value={formData.academicDepartment} 
+                      onValueChange={(value) => {
+                        handleInputChange("academicDepartment", value)
+                        // Reset dependent fields when department changes
+                        handleInputChange("academicYearLevels", [])
+                        handleInputChange("academicCourseProgram", "")
+                        handleInputChange("academicSections", [])
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Elementary">Elementary</SelectItem>
+                        <SelectItem value="Junior High">Junior High</SelectItem>
+                        <SelectItem value="Senior High">Senior High</SelectItem>
+                        <SelectItem value="College">College</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="academicCourseProgram">Course/Program</Label>
+                    <Select 
+                      value={formData.academicCourseProgram} 
+                      onValueChange={(value) => {
+                        handleInputChange("academicCourseProgram", value)
+                        // Reset sections when course changes
+                        handleInputChange("academicSections", [])
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select course/program" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableAcademicPrograms.map((program) => (
+                          <SelectItem key={program} value={program}>
+                            {program}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="academicYearLevels">Year Levels (Multiple Selection)</Label>
+                    <div className="space-y-2">
+                      {availableAcademicYearLevels.map((level) => (
+                        <div key={level} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={`year-${level}`}
+                            checked={formData.academicYearLevels.includes(level)}
+                            onChange={(e) => {
+                              const currentLevels = formData.academicYearLevels || []
+                              const newLevels = e.target.checked
+                                ? [...currentLevels, level]
+                                : currentLevels.filter((l: string) => l !== level)
+                              handleInputChange("academicYearLevels", newLevels)
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          <Label htmlFor={`year-${level}`} className="text-sm font-normal">
+                            {level}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="academicSections">Sections/Blocks (Multiple Selection)</Label>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {availableAcademicSections.map((section) => (
+                        <div key={`${section.name}-${section.yearLevel}`} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={`section-${section.name}-${section.yearLevel}`}
+                            checked={formData.academicSections.includes(`${section.name}-${section.yearLevel}`)}
+                            onChange={(e) => {
+                              const currentSections = formData.academicSections || []
+                              const sectionKey = `${section.name}-${section.yearLevel}`
+                              const newSections = e.target.checked
+                                ? [...currentSections, sectionKey]
+                                : currentSections.filter((s: string) => s !== sectionKey)
+                              handleInputChange("academicSections", newSections)
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          <Label htmlFor={`section-${section.name}-${section.yearLevel}`} className="text-sm font-normal">
+                            <span className="font-medium">{section.name}</span>
+                            <span className="text-blue-600 ml-2 text-xs">({section.yearLevel})</span>
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {(formData.academicYearLevels?.length > 0 || formData.academicSections?.length > 0) && (
+                  <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                    <div className="flex items-start gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                      <div className="text-sm text-green-800">
+                        <p className="font-medium mb-1">Advisory Role Active</p>
+                        <p>Your profile will appear as an adviser on the Yearbook pages for the selected academic information.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </div>
         )
 
@@ -796,6 +1108,230 @@ export function ProfileSetupDialog({ open, onOpenChange, schoolYearId, isEditing
           </div>
         )
 
+      case "ar-sisters":
+        return (
+          <div className="space-y-6">
+            <Card className="border-purple-200 bg-purple-50/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Heart className="h-4 w-4 text-purple-600" />
+                  Religious & Professional Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="vowsDate">Date of Vows</Label>
+                    <Input
+                      id="vowsDate"
+                      type="date"
+                      value={formData.vowsDate}
+                      onChange={(e) => handleInputChange("vowsDate", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="position">Position/Role *</Label>
+                    <Select
+                      value={formData.position}
+                      onValueChange={(value) => {
+                        handleInputChange("position", value)
+                        handleInputChange("departmentAssigned", "")
+                        handleInputChange("customDepartmentAssigned", "")
+                        if (value !== "Others") {
+                          handleInputChange("customPosition", "")
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select position/role" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Department Head">Department Head</SelectItem>
+                        <SelectItem value="Subject Teacher">Subject Teacher</SelectItem>
+                        <SelectItem value="Teacher Adviser">Teacher Adviser</SelectItem>
+                        <SelectItem value="Guidance Counselor">Guidance Counselor</SelectItem>
+                        <SelectItem value="Librarian">Librarian</SelectItem>
+                        <SelectItem value="Registrar">Registrar</SelectItem>
+                        <SelectItem value="Finance Officer">Finance Officer</SelectItem>
+                        <SelectItem value="HR Officer">HR Officer</SelectItem>
+                        <SelectItem value="Others">Others</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    
+                    {formData.position === "Others" && (
+                      <div className="mt-2">
+                        <Label htmlFor="customPosition">Enter Specific Position/Role *</Label>
+                        <Input
+                          id="customPosition"
+                          placeholder="Enter your specific position/role"
+                          value={formData.customPosition}
+                          onChange={(e) => handleInputChange("customPosition", e.target.value)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="departmentAssigned">Department Assigned *</Label>
+                    <Select
+                      value={formData.departmentAssigned}
+                      onValueChange={(value) => {
+                        handleInputChange("departmentAssigned", value)
+                        if (value !== "Others") {
+                          handleInputChange("customDepartmentAssigned", "")
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(formData.position === "Department Head" || formData.position === "Teacher") ? (
+                          <>
+                            <SelectItem value="College of Computer Studies">College of Computer Studies</SelectItem>
+                            <SelectItem value="College of Hospitality Management">College of Hospitality Management</SelectItem>
+                            <SelectItem value="College of Education">College of Education</SelectItem>
+                            <SelectItem value="College of Agriculture">College of Agriculture</SelectItem>
+                            <SelectItem value="Elementary Department">Elementary Department</SelectItem>
+                            <SelectItem value="Junior High School Department">Junior High School Department</SelectItem>
+                            <SelectItem value="Senior High School Department">Senior High School Department</SelectItem>
+                            <SelectItem value="Administration">Administration</SelectItem>
+                            <SelectItem value="Others">Others</SelectItem>
+                          </>
+                        ) : (
+                          <>
+                            <SelectItem value="Administration">Administration</SelectItem>
+                            <SelectItem value="Registrar">Registrar</SelectItem>
+                            <SelectItem value="Finance">Finance</SelectItem>
+                            <SelectItem value="Human Resources">Human Resources</SelectItem>
+                            <SelectItem value="IT Department">IT Department</SelectItem>
+                            <SelectItem value="Library">Library</SelectItem>
+                            <SelectItem value="Guidance">Guidance</SelectItem>
+                            <SelectItem value="Security">Security</SelectItem>
+                            <SelectItem value="Maintenance">Maintenance</SelectItem>
+                            <SelectItem value="Others">Others</SelectItem>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
+                    
+                    {formData.departmentAssigned === "Others" && (
+                      <div className="mt-2">
+                        <Label htmlFor="customDepartmentAssigned">Enter Correct Department Assigned *</Label>
+                        <Input
+                          id="customDepartmentAssigned"
+                          placeholder="Enter department name"
+                          value={formData.customDepartmentAssigned}
+                          onChange={(e) => handleInputChange("customDepartmentAssigned", e.target.value)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="yearsOfService">Years of Service</Label>
+                    <Input
+                      id="yearsOfService"
+                      type="number"
+                      placeholder="10"
+                      value={formData.yearsOfService}
+                      onChange={(e) => handleInputChange("yearsOfService", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="specialization">Specialization</Label>
+                    <Input
+                      id="specialization"
+                      placeholder="Mathematics, Science, English"
+                      value={formData.specialization}
+                      onChange={(e) => handleInputChange("specialization", e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="education">Educational Background</Label>
+                  <Textarea
+                    id="education"
+                    placeholder="Bachelor of Education, Master of Arts in Education"
+                    value={formData.education}
+                    onChange={(e) => handleInputChange("education", e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="messageToStudents">Message to Students</Label>
+                  <Textarea
+                    id="messageToStudents"
+                    placeholder="Share a message with your students"
+                    value={formData.messageToStudents}
+                    onChange={(e) => handleInputChange("messageToStudents", e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="courses">Courses Taught</Label>
+                  <Textarea
+                    id="courses"
+                    placeholder="List the courses you teach"
+                    value={formData.courses}
+                    onChange={(e) => handleInputChange("courses", e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="additionalRoles">Additional Roles & Responsibilities</Label>
+                  <Textarea
+                    id="additionalRoles"
+                    placeholder="Any additional roles or responsibilities"
+                    value={formData.additionalRoles}
+                    onChange={(e) => handleInputChange("additionalRoles", e.target.value)}
+                    rows={3}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-blue-200 bg-blue-50/30">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-blue-600" />
+                  Academic & Research Information
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="publications">Publications</Label>
+                  <Textarea
+                    id="publications"
+                    placeholder="List your published works, research papers, articles"
+                    value={formData.publications}
+                    onChange={(e) => handleInputChange("publications", e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="research">Research Interests</Label>
+                  <Textarea
+                    id="research"
+                    placeholder="Educational Technology, Curriculum Development, Student Assessment"
+                    value={formData.research}
+                    onChange={(e) => handleInputChange("research", e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="classesHandled">Classes Handled</Label>
+                  <Textarea
+                    id="classesHandled"
+                    placeholder="Grade 11 STEM, Grade 12 ABM, College IT Students"
+                    value={formData.classesHandled}
+                    onChange={(e) => handleInputChange("classesHandled", e.target.value)}
+                    rows={2}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )
+
       default:
         return null
     }
@@ -875,6 +1411,12 @@ export function ProfileSetupDialog({ open, onOpenChange, schoolYearId, isEditing
                         Utility
                       </div>
                     </SelectItem>
+                    <SelectItem value="ar-sisters">
+                      <div className="flex items-center gap-2">
+                        <Heart className="h-4 w-4" />
+                        AR Sisters
+                      </div>
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -911,7 +1453,8 @@ export function ProfileSetupDialog({ open, onOpenChange, schoolYearId, isEditing
             selectedRole === "faculty" ||
             selectedRole === "alumni" ||
             selectedRole === "staff" ||
-            selectedRole === "utility") && (
+            selectedRole === "utility" ||
+            selectedRole === "ar-sisters") && (
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Achievements</h3>
               <div className="flex gap-2">

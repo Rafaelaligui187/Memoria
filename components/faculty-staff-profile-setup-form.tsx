@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -33,6 +33,12 @@ export function FacultyStaffProfileSetupForm({
   const [newAchievement, setNewAchievement] = useState("")
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null)
+  
+  // Academic Information state for faculty
+  const [availableAcademicYearLevels, setAvailableAcademicYearLevels] = useState<string[]>([])
+  const [availableAcademicPrograms, setAvailableAcademicPrograms] = useState<string[]>([])
+  const [availableAcademicSections, setAvailableAcademicSections] = useState<{name: string, yearLevel: string}[]>([])
+  const [departmentData, setDepartmentData] = useState<any>(null)
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -52,7 +58,11 @@ export function FacultyStaffProfileSetupForm({
     bio: "",
     courses: "",
     additionalRoles: "",
-    isARSister: false,
+    // Academic Information for Advisory Roles
+    academicDepartment: "",
+    academicYearLevels: [],
+    academicCourseProgram: "",
+    academicSections: [],
   })
 
   // Get school year label for display
@@ -60,13 +70,156 @@ export function FacultyStaffProfileSetupForm({
     return yearId.replace("-", "–")
   }
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: string | string[]) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors((prev) => ({ ...prev, [field]: "" }))
     }
   }
+
+  // Fetch dynamic form data
+  useEffect(() => {
+    const fetchFormData = async () => {
+      try {
+        const response = await fetch(`/api/admin/form-data?schoolYearId=${schoolYearId}`)
+        const result = await response.json()
+        
+        if (result.success) {
+          setDepartmentData(result.data.departments)
+          console.log('Dynamic form data loaded for faculty-staff form:', result.data.departments)
+        } else {
+          console.error('Failed to fetch form data:', result.error)
+          // Fallback to hardcoded data
+          setDepartmentData({
+            "Elementary": {
+              yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
+              programs: ["Elementary"],
+              sections: ["Section A", "Section B", "Section C", "Section D"],
+            },
+            "Junior High": {
+              yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
+              programs: ["Junior High"],
+              sections: ["Section A", "Section B", "Section C", "Section D"],
+            },
+            "Senior High": {
+              yearLevels: ["Grade 11", "Grade 12"],
+              programs: ["STEM", "ABM", "HUMSS", "GAS", "TVL"],
+              sections: ["Section A", "Section B", "Section C", "Section D"],
+            },
+            "College": {
+              yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
+              programs: ["BSIT", "BSCS", "BSIS", "BSA", "BSBA"],
+              sections: ["Section A", "Section B", "Section C", "Section D"],
+            },
+          })
+        }
+      } catch (error) {
+        console.error('Error fetching form data:', error)
+        // Fallback to hardcoded data
+        setDepartmentData({
+          "Elementary": {
+            yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
+            programs: ["Elementary"],
+            sections: ["Section A", "Section B", "Section C", "Section D"],
+          },
+          "Junior High": {
+            yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
+            programs: ["Junior High"],
+            sections: ["Section A", "Section B", "Section C", "Section D"],
+          },
+          "Senior High": {
+            yearLevels: ["Grade 11", "Grade 12"],
+            programs: ["STEM", "ABM", "HUMSS", "GAS", "TVL"],
+            sections: ["Section A", "Section B", "Section C", "Section D"],
+          },
+          "College": {
+            yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
+            programs: ["BSIT", "BSCS", "BSIS", "BSA", "BSBA"],
+            sections: ["Section A", "Section B", "Section C", "Section D"],
+          },
+        })
+      }
+    }
+
+    fetchFormData()
+  }, [schoolYearId])
+
+  // Academic Information dynamic dropdown logic for faculty
+  useEffect(() => {
+    if (departmentData && formData.academicDepartment && departmentData[formData.academicDepartment]) {
+      const deptData = departmentData[formData.academicDepartment]
+      setAvailableAcademicYearLevels(deptData.yearLevels || [])
+      setAvailableAcademicPrograms(deptData.programs || [])
+      
+      // Reset dependent fields when department changes
+      handleInputChange("academicYearLevels", [])
+      handleInputChange("academicCourseProgram", "")
+      handleInputChange("academicSections", [])
+      setAvailableAcademicSections([]) // Clear sections initially
+    }
+  }, [formData.academicDepartment, departmentData])
+
+  // Fetch filtered academic sections when course/program and year levels are selected
+  useEffect(() => {
+    const fetchFilteredAcademicSections = async () => {
+      if (formData.academicDepartment && formData.academicCourseProgram && formData.academicYearLevels?.length > 0) {
+        try {
+          // Make multiple API calls for each selected year level
+          const sectionPromises = formData.academicYearLevels.map(async (yearLevel) => {
+            const params = new URLSearchParams({
+              schoolYearId: schoolYearId,
+              department: formData.academicDepartment,
+              program: formData.academicCourseProgram,
+              yearLevel: yearLevel
+            })
+            
+            const response = await fetch(`/api/admin/form-data?${params}`)
+            const result = await response.json()
+            
+            if (result.success) {
+              // Return sections with their year level information
+              return (result.data.sections || []).map((section: string) => ({
+                name: section,
+                yearLevel: yearLevel
+              }))
+            }
+            return []
+          })
+          
+          // Wait for all API calls to complete
+          const sectionResults = await Promise.all(sectionPromises)
+          
+          // Combine sections from all year levels
+          const allSections = sectionResults.flat()
+          
+          setAvailableAcademicSections(allSections)
+          console.log(`Filtered academic sections for ${formData.academicDepartment} - ${formData.academicCourseProgram} - ${formData.academicYearLevels}:`, allSections)
+          
+          // Reset academic sections if current selections are not available
+          if (formData.academicSections?.length > 0) {
+            const availableSectionKeys = allSections.map(s => `${s.name}-${s.yearLevel}`)
+            const validSections = formData.academicSections.filter((section: string) => 
+              availableSectionKeys.includes(section)
+            )
+            if (validSections.length !== formData.academicSections.length) {
+              handleInputChange("academicSections", validSections)
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching filtered academic sections:', error)
+        }
+      } else {
+        // If not all required fields are selected, clear sections
+        setAvailableAcademicSections([])
+        if (formData.academicSections?.length > 0) {
+          handleInputChange("academicSections", [])
+        }
+      }
+    }
+
+    fetchFilteredAcademicSections()
+  }, [formData.academicDepartment, formData.academicCourseProgram, formData.academicYearLevels, schoolYearId])
 
   const addAchievement = () => {
     if (newAchievement.trim() && achievements.length < 10) {
@@ -148,6 +301,12 @@ export function FacultyStaffProfileSetupForm({
       achievements,
       schoolYearId,
       isEditing,
+      academicInfo: {
+        academicDepartment: formData.academicDepartment,
+        academicYearLevels: formData.academicYearLevels,
+        academicCourseProgram: formData.academicCourseProgram,
+        academicSections: formData.academicSections,
+      }
     })
 
     toast({
@@ -396,8 +555,8 @@ export function FacultyStaffProfileSetupForm({
                     {userRole === "faculty" ? (
                       <>
                         <SelectItem value="Department Head">Department Head</SelectItem>
-                        <SelectItem value="School Directress">School Directress</SelectItem>
-                        <SelectItem value="Teacher">Teacher</SelectItem>
+                        <SelectItem value="Subject Teacher">Subject Teacher</SelectItem>
+                        <SelectItem value="Teacher Adviser">Teacher Adviser</SelectItem>
                       </>
                     ) : (
                       <>
@@ -429,9 +588,7 @@ export function FacultyStaffProfileSetupForm({
                     {userRole === "faculty" ? (
                       <>
                         {/* Dynamic department options based on position */}
-                        {formData.position === "School Directress" ? (
-                          <SelectItem value="School Dean">School Dean</SelectItem>
-                        ) : (formData.position === "Department Head" || formData.position === "Teacher") ? (
+                        {(formData.position === "Department Head" || formData.position === "Teacher") ? (
                           <>
                             <SelectItem value="College of Computer Studies">College of Computer Studies</SelectItem>
                             <SelectItem value="College of Hospitality Management">College of Hospitality Management</SelectItem>
@@ -481,25 +638,6 @@ export function FacultyStaffProfileSetupForm({
                 />
               </div>
 
-              {userRole === "faculty" && (
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="isARSister"
-                      checked={formData.isARSister}
-                      onChange={(e) => handleInputChange("isARSister", e.target.checked.toString())}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <Label htmlFor="isARSister" className="text-sm font-medium">
-                      AR Sister (A.R.)
-                    </Label>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    Check this if you are an AR Sister (A.R.)
-                  </p>
-                </div>
-              )}
 
               <div className="space-y-2">
                 <Label htmlFor="bio">Bio *</Label>
@@ -539,6 +677,149 @@ export function FacultyStaffProfileSetupForm({
               </div>
             </CardContent>
           </Card>
+
+          {/* Academic Information - Faculty (Optional for Advisory Roles) */}
+          {userRole === "faculty" && (
+            <Card className="p-6">
+              <CardHeader className="px-0 pt-0 pb-4">
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <GraduationCap className="h-5 w-5 text-green-600" />
+                  Academic Information (Optional)
+                  <span className="text-sm font-normal text-gray-500">
+                    - Fill this section if you serve as an adviser
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-0 pb-0 space-y-4">
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <div className="flex items-start gap-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                    <div className="text-sm text-blue-800">
+                      <p className="font-medium mb-1">Advisory Role Information</p>
+                      <p>If you select academic information below, your profile will automatically appear as an adviser on the respective Yearbook pages. You can select multiple sections and year levels if you handle multiple advisories.</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="academicDepartment">Department</Label>
+                    <Select 
+                      value={formData.academicDepartment} 
+                      onValueChange={(value) => {
+                        handleInputChange("academicDepartment", value)
+                        // Reset dependent fields when department changes
+                        handleInputChange("academicYearLevels", [])
+                        handleInputChange("academicCourseProgram", "")
+                        handleInputChange("academicSections", [])
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select department" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Elementary">Elementary</SelectItem>
+                        <SelectItem value="Junior High">Junior High</SelectItem>
+                        <SelectItem value="Senior High">Senior High</SelectItem>
+                        <SelectItem value="College">College</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="academicCourseProgram">Course/Program</Label>
+                    <Select 
+                      value={formData.academicCourseProgram} 
+                      onValueChange={(value) => {
+                        handleInputChange("academicCourseProgram", value)
+                        // Reset sections when course changes
+                        handleInputChange("academicSections", [])
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select course/program" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableAcademicPrograms.map((program) => (
+                          <SelectItem key={program} value={program}>
+                            {program}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="academicYearLevels">Year Levels (Multiple Selection)</Label>
+                    <div className="space-y-2">
+                      {availableAcademicYearLevels.map((level) => (
+                        <div key={level} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={`year-${level}`}
+                            checked={formData.academicYearLevels.includes(level)}
+                            onChange={(e) => {
+                              const currentLevels = formData.academicYearLevels || []
+                              const newLevels = e.target.checked
+                                ? [...currentLevels, level]
+                                : currentLevels.filter((l: string) => l !== level)
+                              handleInputChange("academicYearLevels", newLevels)
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          <Label htmlFor={`year-${level}`} className="text-sm font-normal">
+                            {level}
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="academicSections">Sections/Blocks (Multiple Selection)</Label>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {availableAcademicSections.map((section) => (
+                        <div key={`${section.name}-${section.yearLevel}`} className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id={`section-${section.name}-${section.yearLevel}`}
+                            checked={formData.academicSections.includes(`${section.name}-${section.yearLevel}`)}
+                            onChange={(e) => {
+                              const currentSections = formData.academicSections || []
+                              const sectionKey = `${section.name}-${section.yearLevel}`
+                              const newSections = e.target.checked
+                                ? [...currentSections, sectionKey]
+                                : currentSections.filter((s: string) => s !== sectionKey)
+                              handleInputChange("academicSections", newSections)
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          <Label htmlFor={`section-${section.name}-${section.yearLevel}`} className="text-sm font-normal">
+                            <span className="font-medium">{section.name}</span>
+                            <span className="text-blue-600 ml-2 text-xs">({section.yearLevel})</span>
+                          </Label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {(formData.academicYearLevels?.length > 0 || formData.academicSections?.length > 0) && (
+                  <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                    <div className="flex items-start gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                      <div className="text-sm text-green-800">
+                        <p className="font-medium mb-1">Advisory Role Active</p>
+                        <p>Your profile will appear as an adviser on the Yearbook pages for the selected academic information.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Social Media Information */}
           <Card className="p-6">

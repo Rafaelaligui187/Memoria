@@ -9,10 +9,14 @@ function getCollectionName(userType: string, department?: string): string {
   switch (userType) {
     case 'alumni':
       return YEARBOOK_COLLECTIONS.ALUMNI
+    case 'ar-sisters':
+      return YEARBOOK_COLLECTIONS.AR_SISTERS
     case 'faculty':
     case 'staff':
     case 'utility':
       return YEARBOOK_COLLECTIONS.FACULTY_STAFF
+    case 'advisory':
+      return 'advisory_profiles' // Dedicated collection for advisory profiles
     case 'student':
       // For students, we need the department to determine collection
       if (department) {
@@ -48,7 +52,7 @@ export async function GET(request: Request) {
     const db = await connectToDatabase()
     
     // Search across all collections to find profiles owned by this user
-    const collectionsToSearch = Object.values(YEARBOOK_COLLECTIONS)
+    const collectionsToSearch = [...Object.values(YEARBOOK_COLLECTIONS), 'advisory_profiles']
     let allProfiles: any[] = []
     
     for (const collectionName of collectionsToSearch) {
@@ -90,7 +94,8 @@ export async function POST(request: Request) {
       schoolYearId, 
       userType, 
       profileData,
-      userId // Add userId to the request body
+      userId, // Add userId to the request body
+      isAdminEdit = false // Add isAdminEdit flag
     } = body
 
     console.log("[v0] Profile creation attempt:", { schoolYearId, userType, userId })
@@ -142,31 +147,61 @@ export async function POST(request: Request) {
         createdAt: existingProfile.createdAt
       })
 
-      // If user has an approved profile, create a new pending version
+      // If user has an approved profile, replace it entirely when admin is editing
       if (existingProfile.status === "approved") {
-        console.log("[v0] User has approved profile, creating new pending version")
-        
-        // Create new profile document with updated data
-        const newProfileDocument = {
-          schoolYearId,
-          userType,
-          ownedBy: userObjectId,
-          ...profileData,
-          status: "pending", // New version starts as pending
-          previousProfileId: existingProfile._id, // Reference to the approved version
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }
+        if (isAdminEdit) {
+          console.log("[v0] Admin editing approved profile, replacing existing one")
+          
+          // Replace the existing profile entirely
+          const updateResult = await yearbookCollection.updateOne(
+            { _id: existingProfile._id },
+            {
+              $set: {
+                ...profileData,
+                status: "approved", // Admin edits are auto-approved
+                updatedAt: new Date(),
+              }
+            }
+          )
 
-        const result = await yearbookCollection.insertOne(newProfileDocument)
-        
-        return NextResponse.json({
-          success: true,
-          message: "Profile updated successfully and submitted for admin approval",
-          profileId: result.insertedId.toString(),
-          isUpdate: true,
-          previousProfileId: existingProfile._id.toString()
-        })
+          if (updateResult.modifiedCount === 0) {
+            return NextResponse.json({
+              success: false,
+              message: "Failed to update existing profile"
+            }, { status: 500 })
+          }
+
+          return NextResponse.json({
+            success: true,
+            message: "Profile updated successfully and approved automatically",
+            profileId: existingProfile._id.toString(),
+            isUpdate: true
+          })
+        } else {
+          console.log("[v0] User editing approved profile, creating new pending version")
+          
+          // Create new profile document with updated data (user edits)
+          const newProfileDocument = {
+            schoolYearId,
+            userType,
+            ownedBy: userObjectId,
+            ...profileData,
+            status: "pending", // User edits need approval
+            previousProfileId: existingProfile._id, // Reference to the approved version
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }
+
+          const result = await yearbookCollection.insertOne(newProfileDocument)
+          
+          return NextResponse.json({
+            success: true,
+            message: "Profile updated successfully and submitted for admin approval",
+            profileId: result.insertedId.toString(),
+            isUpdate: true,
+            previousProfileId: existingProfile._id.toString()
+          })
+        }
       } 
       // If user has a pending profile, update it instead of creating duplicate
       else if (existingProfile.status === "pending") {
@@ -177,6 +212,7 @@ export async function POST(request: Request) {
           {
             $set: {
               ...profileData,
+              status: isAdminEdit ? "approved" : "pending", // Admin edits are auto-approved
               updatedAt: new Date(),
             }
           }
@@ -191,7 +227,9 @@ export async function POST(request: Request) {
 
         return NextResponse.json({
           success: true,
-          message: "Profile updated successfully and submitted for admin approval",
+          message: isAdminEdit 
+            ? "Profile updated successfully and approved automatically" 
+            : "Profile updated successfully and submitted for admin approval",
           profileId: existingProfile._id.toString(),
           isUpdate: true
         })
@@ -205,7 +243,7 @@ export async function POST(request: Request) {
           {
             $set: {
               ...profileData,
-              status: "pending", // Change status back to pending
+              status: isAdminEdit ? "approved" : "pending", // Admin edits are auto-approved
               updatedAt: new Date(),
               // Clear rejection-related fields
               $unset: {
@@ -257,7 +295,9 @@ export async function POST(request: Request) {
 
         return NextResponse.json({
           success: true,
-          message: "Profile updated successfully and submitted for admin approval",
+          message: isAdminEdit 
+            ? "Profile updated successfully and approved automatically" 
+            : "Profile updated successfully and submitted for admin approval",
           profileId: existingProfile._id.toString(),
           isUpdate: true
         })
@@ -271,7 +311,7 @@ export async function POST(request: Request) {
       userType,
       ownedBy: userObjectId,
       ...profileData,
-      status: "pending",
+      status: isAdminEdit ? "approved" : "pending", // Admin edits are auto-approved
       createdAt: new Date(),
       updatedAt: new Date(),
     }
@@ -279,6 +319,157 @@ export async function POST(request: Request) {
     console.log("[v0] Inserting new profile into yearbook collection...")
     const result = await yearbookCollection.insertOne(profileDocument)
     console.log("[v0] Profile inserted successfully:", result.insertedId)
+
+    // For faculty with academic assignments, create additional entries in department-specific collections
+    if (userType === "faculty" && profileData.academicDepartment && profileData.academicYearLevels?.length > 0) {
+      console.log("[v0] Faculty has academic assignments, creating additional entries...")
+      
+      try {
+        // Get the department-specific collection
+        const departmentCollectionName = getCollectionName("student", profileData.academicDepartment)
+        const departmentCollection = db.collection(departmentCollectionName)
+        
+        // Create entries for each academic assignment
+        for (const yearLevel of profileData.academicYearLevels) {
+          // If faculty has specific sections assigned, create entries for each section
+          if (profileData.academicSections?.length > 0) {
+            for (const sectionKey of profileData.academicSections) {
+              const [sectionName, sectionYearLevel] = sectionKey.split('-')
+              
+              // Only create entry if this section matches the current year level
+              if (sectionYearLevel === yearLevel) {
+                const facultyYearbookEntry = {
+                  ...profileDocument,
+                  // Override fields for yearbook display
+                  department: profileData.academicDepartment,
+                  yearLevel: yearLevel,
+                  courseProgram: profileData.academicCourseProgram || profileData.academicDepartment,
+                  blockSection: sectionName,
+                  // Mark as faculty entry
+                  isFacultyEntry: true,
+                  originalFacultyId: result.insertedId,
+                  // Ensure it's approved if the main profile is approved
+                  status: profileDocument.status,
+                  createdAt: new Date(),
+                  updatedAt: new Date(),
+                }
+                
+                await departmentCollection.insertOne(facultyYearbookEntry)
+                console.log(`[v0] Created faculty yearbook entry for ${profileData.academicDepartment} - ${yearLevel} - ${sectionName}`)
+              }
+            }
+          } else {
+            // If no specific sections, create a general entry for the year level
+            const facultyYearbookEntry = {
+              ...profileDocument,
+              // Override fields for yearbook display
+              department: profileData.academicDepartment,
+              yearLevel: yearLevel,
+              courseProgram: profileData.academicCourseProgram || profileData.academicDepartment,
+              blockSection: "All Sections", // Default for faculty without specific section assignment
+              // Mark as faculty entry
+              isFacultyEntry: true,
+              originalFacultyId: result.insertedId,
+              // Ensure it's approved if the main profile is approved
+              status: profileDocument.status,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }
+            
+            await departmentCollection.insertOne(facultyYearbookEntry)
+            console.log(`[v0] Created faculty yearbook entry for ${profileData.academicDepartment} - ${yearLevel}`)
+          }
+        }
+      } catch (academicError) {
+        console.error("[v0] Error creating faculty academic entries:", academicError)
+        // Don't fail the main profile creation if academic entries fail
+      }
+    }
+
+    // For advisory profiles with academic assignments, create additional entries in department-specific collections
+    if (userType === "advisory" && profileData.academicDepartment && profileData.academicYearLevels) {
+      console.log("[v0] Advisory has academic assignments, creating additional entries...")
+      
+      try {
+        // Parse the JSON strings to arrays
+        const yearLevels = (() => {
+          try {
+            return JSON.parse(profileData.academicYearLevels || "[]")
+          } catch {
+            return []
+          }
+        })()
+        
+        const sections = (() => {
+          try {
+            return JSON.parse(profileData.academicSections || "[]")
+          } catch {
+            return []
+          }
+        })()
+        
+        if (yearLevels.length > 0) {
+          // Get the department-specific collection
+          const departmentCollectionName = getCollectionName("student", profileData.academicDepartment)
+          const departmentCollection = db.collection(departmentCollectionName)
+          
+          // Create entries for each academic assignment
+          for (const yearLevel of yearLevels) {
+            // If advisory has specific sections assigned, create entries for each section
+            if (sections.length > 0) {
+              for (const sectionKey of sections) {
+                const [sectionName, sectionYearLevel] = sectionKey.split('-')
+                
+                // Only create entry if this section matches the current year level
+                if (sectionYearLevel === yearLevel) {
+                  const advisoryYearbookEntry = {
+                    ...profileDocument,
+                    // Override fields for yearbook display
+                    department: profileData.academicDepartment,
+                    yearLevel: yearLevel,
+                    courseProgram: profileData.academicCourseProgram || profileData.academicDepartment,
+                    blockSection: sectionName,
+                    // Mark as advisory entry
+                    isAdvisoryEntry: true,
+                    originalAdvisoryId: result.insertedId,
+                    // Ensure it's approved if the main profile is approved
+                    status: profileDocument.status,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                  }
+                  
+                  await departmentCollection.insertOne(advisoryYearbookEntry)
+                  console.log(`[v0] Created advisory yearbook entry for ${profileData.academicDepartment} - ${yearLevel} - ${sectionName}`)
+                }
+              }
+            } else {
+              // If no specific sections, create a general entry for the year level
+              const advisoryYearbookEntry = {
+                ...profileDocument,
+                // Override fields for yearbook display
+                department: profileData.academicDepartment,
+                yearLevel: yearLevel,
+                courseProgram: profileData.academicCourseProgram || profileData.academicDepartment,
+                blockSection: "All Sections", // Default for advisory without specific section assignment
+                // Mark as advisory entry
+                isAdvisoryEntry: true,
+                originalAdvisoryId: result.insertedId,
+                // Ensure it's approved if the main profile is approved
+                status: profileDocument.status,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              }
+              
+              await departmentCollection.insertOne(advisoryYearbookEntry)
+              console.log(`[v0] Created advisory yearbook entry for ${profileData.academicDepartment} - ${yearLevel}`)
+            }
+          }
+        }
+      } catch (academicError) {
+        console.error("[v0] Error creating advisory academic entries:", academicError)
+        // Don't fail the main profile creation if academic entries fail
+      }
+    }
 
     // Create notification for new profile submission
     try {
@@ -312,7 +503,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: "Profile created successfully and submitted for admin approval",
+      message: isAdminEdit 
+        ? "Profile created successfully and approved automatically" 
+        : "Profile created successfully and submitted for admin approval",
       profileId: result.insertedId.toString(),
     })
 
@@ -343,7 +536,7 @@ export async function DELETE(request: Request) {
     const db = await connectToDatabase()
     
     // Search across all collections to find the profile
-    const collectionsToSearch = Object.values(YEARBOOK_COLLECTIONS)
+    const collectionsToSearch = [...Object.values(YEARBOOK_COLLECTIONS), 'advisory_profiles']
     let deletedProfile = null
     let foundCollection = null
     

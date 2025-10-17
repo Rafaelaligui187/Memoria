@@ -124,17 +124,49 @@ export async function updateAlbum(id: string, updates: Partial<AlbumData>): Prom
 }
 
 export async function deleteAlbum(id: string): Promise<boolean> {
-  const db = await connectToDatabase()
-  const albumsCollection = db.collection('gallery_albums')
-  const mediaCollection = db.collection('gallery_media')
-  
-  // Delete all media associated with this album
-  await mediaCollection.deleteMany({ albumId: id })
-  
-  // Delete the album
-  const result = await albumsCollection.deleteOne({ id })
-  
-  return result.deletedCount > 0
+  try {
+    console.log('[Gallery DB] Starting album deletion for ID:', id)
+    
+    const db = await connectToDatabase()
+    console.log('[Gallery DB] Connected to database')
+    
+    const albumsCollection = db.collection('gallery_albums')
+    const mediaCollection = db.collection('gallery_media')
+    
+    // First, check if album exists
+    const album = await albumsCollection.findOne({ id })
+    console.log('[Gallery DB] Album exists:', album ? 'Yes' : 'No')
+    
+    if (!album) {
+      console.log('[Gallery DB] Album not found, returning false')
+      return false
+    }
+    
+    console.log('[Gallery DB] Album found:', album.title)
+    
+    // Delete all media associated with this album
+    console.log('[Gallery DB] Deleting associated media items...')
+    const mediaDeleteResult = await mediaCollection.deleteMany({ albumId: id })
+    console.log('[Gallery DB] Deleted media items:', mediaDeleteResult.deletedCount)
+    
+    // Delete the album
+    console.log('[Gallery DB] Deleting album...')
+    const albumDeleteResult = await albumsCollection.deleteOne({ id })
+    console.log('[Gallery DB] Album delete result:', albumDeleteResult)
+    
+    const success = albumDeleteResult.deletedCount > 0
+    console.log('[Gallery DB] Delete operation successful:', success)
+    
+    return success
+  } catch (error) {
+    console.error('[Gallery DB] Error deleting album:', error)
+    console.error('[Gallery DB] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      albumId: id
+    })
+    throw error
+  }
 }
 
 // Media management functions

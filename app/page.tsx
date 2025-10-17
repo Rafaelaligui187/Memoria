@@ -9,9 +9,10 @@ import { Lock, Info } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Header } from "@/components/header"
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
+import { getPublicAlbums, type AlbumData } from "@/lib/gallery-service"
 
 // Animation variants
 const fadeIn = {
@@ -49,6 +50,8 @@ const shimmer = {
 export default function Home() {
   const searchParams = useSearchParams()
   const { toast } = useToast()
+  const [galleryAlbums, setGalleryAlbums] = useState<AlbumData[]>([])
+  const [galleryLoading, setGalleryLoading] = useState(true)
 
   useEffect(() => {
     if (searchParams.get("unauthorized") === "true") {
@@ -61,6 +64,26 @@ export default function Home() {
       window.history.replaceState({}, "", "/")
     }
   }, [searchParams, toast])
+
+  useEffect(() => {
+    const loadGalleryAlbums = async () => {
+      try {
+        setGalleryLoading(true)
+        const albums = await getPublicAlbums()
+        // Get the first 8 FEATURED albums for the highlights section
+        const featuredAlbums = albums.filter(album => album.isFeatured)
+        setGalleryAlbums(featuredAlbums.slice(0, 8))
+      } catch (error) {
+        console.error('Error loading gallery albums:', error)
+        // Keep empty array on error
+        setGalleryAlbums([])
+      } finally {
+        setGalleryLoading(false)
+      }
+    }
+
+    loadGalleryAlbums()
+  }, [])
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -390,55 +413,64 @@ export default function Home() {
               variants={staggerContainer}
               className="grid grid-cols-2 md:grid-cols-4 gap-4"
             >
-              {[1, 2, 3, 4].map((item) => (
-                <motion.div
-                  key={`top-${item}`}
-                  variants={fadeIn}
-                  whileHover={{ scale: 1.03 }}
-                  className="relative group overflow-hidden rounded-xl shadow-md"
-                >
-                  <Link href={`/gallery/${item}`}>
-                    <Image
-                      src={`https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQB2DCl40uJ47v2FY5Cs466q9AfXrw_Z9C4ag&sheight=300&width=400&text=Event+${item}`}
-                      width={400}
-                      height={300}
-                      alt={`School event ${item}`}
-                      className="w-full h-64 object-cover transition-transform duration-500 group-hover:scale-110"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-blue-900/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
-                      <div className="p-4">
-                        <h3 className="text-white font-bold">Foundation Day {item}</h3>
-                        <p className="text-blue-200 text-sm">March 2024</p>
+              {galleryLoading ? (
+                // Loading skeleton
+                Array.from({ length: 8 }).map((_, index) => (
+                  <motion.div
+                    key={`skeleton-${index}`}
+                    variants={fadeIn}
+                    className="relative overflow-hidden rounded-xl shadow-md bg-gray-200 animate-pulse"
+                  >
+                    <div className="w-full h-64 bg-gray-300"></div>
+                  </motion.div>
+                ))
+              ) : galleryAlbums.length > 0 ? (
+                // Dynamic album data
+                galleryAlbums.map((album, index) => (
+                  <motion.div
+                    key={album.id}
+                    variants={fadeIn}
+                    whileHover={{ scale: 1.03 }}
+                    className="relative group overflow-hidden rounded-xl shadow-md"
+                  >
+                    <Link href={`/gallery/${album.id}`}>
+                      <Image
+                        src={album.coverImage || "/placeholder.jpg"}
+                        width={400}
+                        height={300}
+                        alt={album.title}
+                        className="w-full h-64 object-cover transition-transform duration-500 group-hover:scale-110"
+                        onError={(e) => {
+                          // Fallback to a default image if cover image fails to load
+                          const target = e.target as HTMLImageElement
+                          target.src = "/placeholder.jpg"
+                        }}
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-blue-900/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
+                        <div className="p-4">
+                          <h3 className="text-white font-bold">{album.title}</h3>
+                          <p className="text-blue-200 text-sm">
+                            {new Date(album.date).toLocaleDateString('en-US', { 
+                              month: 'long', 
+                              year: 'numeric' 
+                            })}
+                          </p>
+                          {album.location && (
+                            <p className="text-blue-200 text-xs mt-1">{album.location}</p>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </Link>
-                </motion.div>
-              ))}
-
-              {[5, 6, 7, 8].map((item) => (
-                <motion.div
-                  key={`bottom-${item}`}
-                  variants={fadeIn}
-                  whileHover={{ scale: 1.03 }}
-                  className="relative group overflow-hidden rounded-xl shadow-md"
-                >
-                  <Link href={`/gallery/${item}`}>
-                    <Image
-                      src={`https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRLAjR0cJP0QRzToK_y8UPpyxV8sqvmMQXgNg&sheight=300&width=400&text=Event+${item}`}
-                      width={400}
-                      height={300}
-                      alt={`School event ${item}`}
-                      className="w-full h-64 object-cover transition-transform duration-500 group-hover:scale-110"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-indigo-900/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end">
-                      <div className="p-4">
-                        <h3 className="text-white font-bold">Foundation Day Rehearsal Day {item - 4}</h3>
-                        <p className="text-indigo-200 text-sm">April 2024</p>
-                      </div>
-                    </div>
-                  </Link>
-                </motion.div>
-              ))}
+                    </Link>
+                  </motion.div>
+                ))
+              ) : (
+                // No featured albums available
+                <div className="col-span-full text-center py-12">
+                  <Camera className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-600 mb-2">No Featured Albums Available</h3>
+                  <p className="text-gray-500">Check back later for featured gallery content.</p>
+                </div>
+              )}
             </motion.div>
 
             <motion.div

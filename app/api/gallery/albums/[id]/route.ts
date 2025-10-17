@@ -111,23 +111,33 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    console.log('[Album API] DELETE request received for album ID:', params.id)
+    
     // Get the album before deleting to capture data for audit log
     const album = await getAlbumById(params.id)
+    console.log('[Album API] Album found:', album ? 'Yes' : 'No')
+    
     if (!album) {
+      console.log('[Album API] Album not found, returning 404')
       return NextResponse.json(
         { success: false, error: 'Album not found' },
         { status: 404 }
       )
     }
     
+    console.log('[Album API] Attempting to delete album:', album.title)
     const success = await deleteAlbum(params.id)
+    console.log('[Album API] Delete operation result:', success)
     
     if (!success) {
+      console.log('[Album API] Delete operation failed, returning 404')
       return NextResponse.json(
         { success: false, error: 'Album not found' },
         { status: 404 }
       )
     }
+    
+    console.log('[Album API] Album deleted successfully, creating audit log')
     
     // Create audit log for album deletion
     try {
@@ -156,19 +166,27 @@ export async function DELETE(
         userAgent: clientInfo.userAgent,
         status: "success"
       })
+      console.log('[Album API] Audit log created successfully')
     } catch (auditError) {
       console.error('[Album API] Failed to create audit log for deletion:', auditError)
       // Don't fail the album deletion if audit logging fails
     }
     
+    console.log('[Album API] Returning success response')
     return NextResponse.json({
       success: true,
       message: 'Album deleted successfully'
     })
   } catch (error) {
-    console.error('Error deleting album:', error)
+    console.error('[Album API] Error deleting album:', error)
+    console.error('[Album API] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      albumId: params.id
+    })
+    
     return NextResponse.json(
-      { success: false, error: 'Failed to delete album' },
+      { success: false, error: `Failed to delete album: ${error instanceof Error ? error.message : 'Unknown error'}` },
       { status: 500 }
     )
   }

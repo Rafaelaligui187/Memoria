@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server"
 interface Profile {
   id: string
   userId: string
-  type: "student" | "faculty" | "alumni" | "staff" | "utility"
+  type: "student" | "faculty" | "alumni" | "staff" | "utility" | "advisory"
   status: "draft" | "pending" | "approved" | "rejected"
   yearId: string
   data: Record<string, any>
@@ -317,6 +317,23 @@ export async function POST(request: NextRequest, { params }: { params: { yearId:
         "position",
         "officeAssigned",
         "yearsOfService",
+      ],
+      advisory: [
+        "fullName",
+        "age",
+        "gender",
+        "birthday",
+        "address",
+        "email",
+        "sayingMotto",
+        "position",
+        "departmentAssigned",
+        "yearsOfService",
+        "messageToStudents",
+        "academicDepartment",
+        "academicYearLevels",
+        "academicCourseProgram",
+        "academicSections",
       ],
     }
 

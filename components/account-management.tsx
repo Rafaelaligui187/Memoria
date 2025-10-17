@@ -708,7 +708,7 @@ export function AccountManagement({ selectedYear, selectedYearLabel }: AccountMa
                     src={profileData.profilePicture || profileData.profilePictureUrl || "/placeholder.svg"}
                   />
                   <AvatarFallback className="text-lg">
-                    {profileData.fullName || selectedAccount?.name}
+                    {(profileData.fullName || selectedAccount?.name)
                       ?.split(" ")
                       .map((n: string) => n[0])
                       .join("")}
@@ -943,6 +943,7 @@ export function AccountManagement({ selectedYear, selectedYearLabel }: AccountMa
               schoolYearId={selectedYear}
               userId={selectedAccount.ownedBy || selectedAccount.id}
               isEditing={true}
+              isAdminEdit={true}
               onBack={() => setEditDialogOpen(false)}
               onSave={() => {
                 setEditDialogOpen(false)

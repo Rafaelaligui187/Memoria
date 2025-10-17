@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { yearbookService } from "@/lib/yearbook-service"
 import { createAuditLog, getClientInfo } from "@/lib/audit-log-utils"
+import { adminNotificationService } from "@/lib/admin-notification-service"
 
 interface SchoolYear {
   id: string
@@ -109,6 +110,19 @@ export async function POST(request: NextRequest) {
     } catch (auditError) {
       console.error('[School Years API] Failed to create audit log for creation:', auditError)
       // Don't fail the school year creation if audit logging fails
+    }
+
+    // Create notification for all users about new school year
+    try {
+      await adminNotificationService.notifyNewSchoolYear({
+        label: newYear.label,
+        startDate: newYear.startDate,
+        endDate: newYear.endDate
+      })
+      console.log('[School Years API] Notification created for new school year')
+    } catch (notificationError) {
+      console.error('[School Years API] Failed to create notification:', notificationError)
+      // Don't fail the school year creation if notification fails
     }
 
     return NextResponse.json({

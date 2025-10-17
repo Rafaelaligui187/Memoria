@@ -14,8 +14,8 @@ export async function GET(request: NextRequest) {
 
     const db = await connectToDatabase()
     
-    // Search across all collections
-    const collectionsToSearch = Object.values(YEARBOOK_COLLECTIONS)
+    // Search across all collections including advisory profiles
+    const collectionsToSearch = [...Object.values(YEARBOOK_COLLECTIONS), 'advisory_profiles']
     let allProfiles: any[] = []
     
     for (const collectionName of collectionsToSearch) {
@@ -43,10 +43,10 @@ export async function GET(request: NextRequest) {
     // Convert profiles to Account format for admin display
     const accounts = allProfiles.map(profile => ({
       id: profile._id.toString(),
-      name: profile.fullName,
+      name: profile.fullName || `${profile.firstName} ${profile.lastName}`,
       email: profile.email,
       role: mapUserTypeToRole(profile.userType),
-      department: profile.department || 'Unknown',
+      department: profile.department || profile.departmentAssigned || profile.academicDepartment || 'Unknown',
       status: mapStatusToAccountStatus(profile.status),
       yearId: profile.schoolYearId,
       schoolYear: profile.schoolYear,
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
 }
 
 // Helper function to map user type to display role
-function mapUserTypeToRole(userType: string): "Student" | "Faculty" | "Alumni" | "Staff" | "Utility" {
+function mapUserTypeToRole(userType: string): "Student" | "Faculty" | "Alumni" | "Staff" | "Utility" | "Advisory" {
   switch (userType) {
     case 'student':
       return "Student"
@@ -92,6 +92,8 @@ function mapUserTypeToRole(userType: string): "Student" | "Faculty" | "Alumni" |
       return "Staff"
     case 'utility':
       return "Utility"
+    case 'advisory':
+      return "Advisory"
     default:
       return "Student"
   }
@@ -126,6 +128,10 @@ function getCollectionDisplayName(collectionName: string): string {
       return 'Alumni'
     case YEARBOOK_COLLECTIONS.FACULTY_STAFF:
       return 'Faculty & Staff'
+    case YEARBOOK_COLLECTIONS.AR_SISTERS:
+      return 'AR Sisters'
+    case 'advisory_profiles':
+      return 'Advisory'
     default:
       return collectionName
   }

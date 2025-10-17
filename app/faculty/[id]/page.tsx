@@ -31,89 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Header } from "@/components/header"
 import { isAuthenticated } from "@/lib/auth"
 
-const FACULTY_DATA = [
-  {
-    id: 1,
-    name: "Sr. Josephine D. Ativo, A.R. PhD, EM",
-    position: "School Directress",
-    department: "Administration",
-    hierarchy: "directress",
-    schoolYear: "2024-2025",
-    yearsOfService: 15,
-    office: "Main Building",
-    image: "/images/Picture1.png",
-    fullName: "Sr. Josephine D. Ativo, A.R. PhD, EM",
-    nickname: "Sr. Josephine",
-    age: 55,
-    birthday: "1969-03-15",
-    address: "Consolatrix Convent, Toledo City",
-    email: "directress@consolatrix.edu.ph",
-    phone: "+63 912 345 6789",
-    departmentAssigned: "Administration",
-    sayingMotto: "Education is the most powerful weapon which you can use to change the world.",
-    messageToStudents:
-      "My dear students, remember that education is not just about acquiring knowledge, but about developing character and serving others with love and compassion.",
-    socialMediaFacebook: "consolatrixcollege",
-    socialMediaInstagram: "@consolatrixcollege",
-    socialMediaTwitter: "@consolatrixcollege",
-    profilePictureUrl: "/images/Picture1.png",
-    bio: "My dear Graduates, It is with great pleasure and admiration that I convey my best wishes and profound felicitations to all the graduates, completers, and academic awardees of the School Year 2019-2020. Let us celebrate your milestone in a very unique, virtual and personal way. This has never happened before. We pray that this pandemic will never ever happen again. Let this school year's theme inspire you, Filipino Youth in Mission: Beloved. Gifted. Empowered. Just like other high school graduates, you will enjoy the greatest ever scale of freedom in the next sojourn of your life. You will have many academic and life decisions to make. We hope that what the world is now experiencing has enlightened you not just about the kind of future you want for yourselves but about the kind of leaders, nation builders, agents of change and catalysts of progress you need to become to create a future that is true, good, and beautiful for all of mankind. You have a missionl. Be role models as an ARSCians wherever God will bring you. I would also lke to give special thanks to the parents of our graduates and completers for their patience, understanding, sacrifices and support both moral and financial during these challenging, but rewarding years at Consolatrix College of Toledo City, Inc. Congratulations class of 2020, you did it! You will be missed greatly, and will always be a part of the Consolatrician family.",
-    achievements: [
-      "Educational Leadership Excellence Award 2023",
-      "Community Service Recognition 2022",
-      "Outstanding Administrator Award 2021",
-    ],
-    additionalRoles: ["Board Member - Catholic Educational Association", "Regional Education Council Member"],
-    research: ["Educational Leadership in Catholic Institutions", "Student Success Strategies"],
-    classesHandled: ["Educational Administration Seminar", "Leadership Development Workshop"],
-  },
-  {
-    id: 2,
-    name: "Prof. Juan Carlos Reyes",
-    position: "IT Department Head",
-    department: "College",
-    hierarchy: "department_head",
-    schoolYear: "2024-2025",
-    yearsOfService: 12,
-    specialization: "Computer Science",
-    education: "M.S. in Computer Science",
-    email: "juan.reyes@consolatrix.edu.ph",
-    phone: "+63 912 345 6790",
-    office: "IT Building, Room 301",
-    image: "/placeholder.svg?height=400&width=400&text=Prof.+Juan+Reyes",
-    fullName: "Prof. Juan Carlos Reyes",
-    nickname: "Prof. Juan",
-    age: 42,
-    birthday: "1982-07-20",
-    address: "123 Tech Street, Toledo City",
-    departmentAssigned: "College of Computer Studies",
-    sayingMotto: "Technology is best when it brings people together and solves real problems.",
-    messageToStudents:
-      "Embrace the power of technology, but never forget the human element. Code with purpose, innovate with compassion, and always strive to make the world a better place through your skills.",
-    socialMediaFacebook: "juan.reyes.prof",
-    socialMediaInstagram: "@profJuanReyes",
-    socialMediaTwitter: "@ProfJuanReyes",
-    profilePictureUrl: "/placeholder.svg?height=400&width=400&text=Prof.+Juan+Reyes",
-    bio: "Professor Reyes is passionate about emerging technologies and has guided numerous students in their programming journey. He specializes in web development and artificial intelligence, bringing cutting-edge knowledge to the classroom.",
-    achievements: [
-      "Best Faculty Award 2023",
-      "Innovation in Teaching Award 2022",
-      "Industry Partnership Excellence 2021",
-      "Technology Leadership Award 2020",
-    ],
-    additionalRoles: ["IT Consultant for Local Businesses", "Technology Advisory Board Member"],
-    courses: ["Web Development", "Database Systems", "Artificial Intelligence", "Programming Fundamentals"],
-    publications: ["Modern Web Development Practices (2023)", "AI in Education: Opportunities and Challenges (2022)"],
-    research: ["Machine Learning Applications in Education", "Web Technologies for Enhanced Learning"],
-    classesHandled: ["CS101 - Programming Fundamentals", "CS301 - Web Development", "CS401 - Artificial Intelligence"],
-    gallery: [
-      "/placeholder.svg?height=300&width=400&text=IT+Lab+1",
-      "/placeholder.svg?height=300&width=400&text=IT+Lab+2",
-      "/placeholder.svg?height=300&width=400&text=Programming+Class",
-      "/placeholder.svg?height=300&width=400&text=Tech+Conference",
-    ],
-  },
-]
+// Hardcoded faculty data removed - now fetching from API
 
 const getDepartmentColor = (department: string) => {
   const colors = {
@@ -127,38 +45,7 @@ const getDepartmentColor = (department: string) => {
   return colors[department as keyof typeof colors] || "from-gray-600 to-gray-800"
 }
 
-const OFFICE_HOURS = [
-  { day: "Monday", time: "2:00 PM - 4:00 PM", location: "Faculty Office" },
-  { day: "Wednesday", time: "10:00 AM - 12:00 PM", location: "Faculty Office" },
-  { day: "Friday", time: "1:00 PM - 3:00 PM", location: "Faculty Office" },
-]
-
-const STUDENT_TESTIMONIALS = [
-  {
-    id: 1,
-    name: "Maria Santos",
-    year: "4th Year College",
-    message: "Professor Reyes made programming so much easier to understand. His teaching style is amazing!",
-    rating: 5,
-    date: "2024-01-15",
-  },
-  {
-    id: 2,
-    name: "John Dela Cruz",
-    year: "3rd Year College",
-    message: "The best IT professor I've ever had. Always willing to help and explain concepts clearly.",
-    rating: 5,
-    date: "2024-01-10",
-  },
-  {
-    id: 3,
-    name: "Anna Rodriguez",
-    year: "2nd Year College",
-    message: "Sr. Josephine's wisdom and guidance have been invaluable throughout my studies.",
-    rating: 5,
-    date: "2024-01-08",
-  },
-]
+// Hardcoded data removed - now fetching from API
 
 export default function FacultyProfilePage() {
   const params = useParams()
