@@ -370,9 +370,9 @@ export function CreateManualProfileForm({
       setAvailableAcademicPrograms(deptData.programs || [])
       
       // Reset dependent fields when department changes
-      updateField("academicYearLevels", [])
+      updateField("academicYearLevels", "[]")
       updateField("academicCourseProgram", "")
-      updateField("academicSections", [])
+      updateField("academicSections", "[]")
       setAvailableAcademicSections([]) // Clear sections initially
     }
   }, [formData.academicDepartment, departmentData, updateField])
@@ -380,10 +380,11 @@ export function CreateManualProfileForm({
   // Fetch filtered academic sections when course/program and year levels are selected
   useEffect(() => {
     const fetchFilteredAcademicSections = async () => {
-      if (formData.academicDepartment && formData.academicCourseProgram && formData.academicYearLevels?.length > 0) {
+      const academicYearLevels = JSON.parse(formData.academicYearLevels || "[]")
+      if (formData.academicDepartment && formData.academicCourseProgram && academicYearLevels.length > 0) {
         try {
           // Make multiple API calls for each selected year level
-          const sectionPromises = formData.academicYearLevels.map(async (yearLevel) => {
+          const sectionPromises = academicYearLevels.map(async (yearLevel: string) => {
             const params = new URLSearchParams({
               schoolYearId: schoolYearId,
               department: formData.academicDepartment,
@@ -411,16 +412,17 @@ export function CreateManualProfileForm({
           const allSections = sectionResults.flat()
           
           setAvailableAcademicSections(allSections)
-          console.log(`Filtered academic sections for ${formData.academicDepartment} - ${formData.academicCourseProgram} - ${formData.academicYearLevels}:`, allSections)
+          console.log(`Filtered academic sections for ${formData.academicDepartment} - ${formData.academicCourseProgram} - ${academicYearLevels}:`, allSections)
           
           // Reset academic sections if current selections are not available
-          if (formData.academicSections?.length > 0) {
+          const academicSections = JSON.parse(formData.academicSections || "[]")
+          if (academicSections.length > 0) {
             const availableSectionKeys = allSections.map(s => `${s.name}-${s.yearLevel}`)
-            const validSections = formData.academicSections.filter((section: string) => 
+            const validSections = academicSections.filter((section: string) => 
               availableSectionKeys.includes(section)
             )
-            if (validSections.length !== formData.academicSections.length) {
-              updateField("academicSections", validSections)
+            if (validSections.length !== academicSections.length) {
+              updateField("academicSections", JSON.stringify(validSections))
             }
           }
         } catch (error) {
@@ -430,7 +432,7 @@ export function CreateManualProfileForm({
         // If not all required fields are selected, clear sections
         setAvailableAcademicSections([])
         if (formData.academicSections?.length > 0) {
-          updateField("academicSections", [])
+          updateField("academicSections", "[]")
         }
       }
     }
@@ -456,11 +458,12 @@ export function CreateManualProfileForm({
   }
 
   const handleInputChange = (field: string, value: string | string[]) => {
-    updateField(field, value)
+    const stringValue = Array.isArray(value) ? JSON.stringify(value) : value
+    updateField(field, stringValue)
     
     // Auto-calculate age when birthday changes
     if (field === "birthday" && value) {
-      const calculatedAge = calculateAge(value)
+      const calculatedAge = calculateAge(value as string)
       if (calculatedAge !== null) {
         updateField("age", calculatedAge.toString())
       }
@@ -1811,163 +1814,6 @@ export function CreateManualProfileForm({
       case "advisory":
         return (
           <div className="space-y-6">
-            {/* Profile Picture Upload */}
-            <Card className="p-6">
-              <CardHeader className="px-0 pt-0 pb-4">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-pink-600" />
-                  Profile Picture
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-0 pb-0 space-y-4">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-6">
-                    {/* Profile Photo Preview */}
-                    <div className="relative w-24 h-24 rounded-full overflow-hidden border-4 border-gray-200">
-                      {profilePhoto ? (
-                        <Image src={profilePhoto} alt="Profile" fill className="object-cover" />
-                      ) : (
-                        <div className="absolute inset-0 flex items-center justify-center bg-gray-100 text-gray-400">
-                          <User className="h-8 w-8" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Upload Section */}
-                    <div className="flex-1 space-y-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="profilePhoto">Upload Profile Photo</Label>
-                        <div className="flex items-center gap-3">
-                          <Input
-                            id="profilePhoto"
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageUpload}
-                            className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              setProfilePhoto("")
-                              handleInputChange("profilePhoto", "")
-                            }}
-                            disabled={!profilePhoto}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <p className="text-sm text-gray-500">
-                          Recommended: Square image, at least 400x400px
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Basic Information */}
-            <Card className="p-6">
-              <CardHeader className="px-0 pt-0 pb-4">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <User className="h-5 w-5 text-blue-600" />
-                  Basic Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-0 pb-0 space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="firstName">First Name *</Label>
-                    <Input
-                      id="firstName"
-                      placeholder="Enter first name"
-                      value={formData.firstName}
-                      onChange={(e) => handleInputChange("firstName", e.target.value)}
-                      className={errors.firstName ? "border-red-500" : ""}
-                    />
-                    {errors.firstName && <p className="text-sm text-red-600">{errors.firstName}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="lastName">Last Name *</Label>
-                    <Input
-                      id="lastName"
-                      placeholder="Enter last name"
-                      value={formData.lastName}
-                      onChange={(e) => handleInputChange("lastName", e.target.value)}
-                      className={errors.lastName ? "border-red-500" : ""}
-                    />
-                    {errors.lastName && <p className="text-sm text-red-600">{errors.lastName}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="middleName">Middle Name</Label>
-                    <Input
-                      id="middleName"
-                      placeholder="Enter middle name"
-                      value={formData.middleName}
-                      onChange={(e) => handleInputChange("middleName", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="suffix">Suffix</Label>
-                    <Input
-                      id="suffix"
-                      placeholder="e.g., Jr., Sr., III"
-                      value={formData.suffix}
-                      onChange={(e) => handleInputChange("suffix", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="birthday">Birthday *</Label>
-                    <Input
-                      id="birthday"
-                      type="date"
-                      value={formData.birthday}
-                      onChange={(e) => handleInputChange("birthday", e.target.value)}
-                      className={errors.birthday ? "border-red-500" : ""}
-                    />
-                    {errors.birthday && <p className="text-sm text-red-600">{errors.birthday}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="address">Address *</Label>
-                    <Textarea
-                      id="address"
-                      placeholder="Enter complete address"
-                      value={formData.address}
-                      onChange={(e) => handleInputChange("address", e.target.value)}
-                      rows={3}
-                      className={errors.address ? "border-red-500" : ""}
-                    />
-                    {errors.address && <p className="text-sm text-red-600">{errors.address}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="Enter email address"
-                      value={formData.email}
-                      onChange={(e) => handleInputChange("email", e.target.value)}
-                      className={errors.email ? "border-red-500" : ""}
-                    />
-                    {errors.email && <p className="text-sm text-red-600">{errors.email}</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone Number *</Label>
-                    <Input
-                      id="phone"
-                      placeholder="Enter phone number"
-                      value={formData.phone}
-                      onChange={(e) => handleInputChange("phone", e.target.value)}
-                      className={errors.phone ? "border-red-500" : ""}
-                    />
-                    {errors.phone && <p className="text-sm text-red-600">{errors.phone}</p>}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Professional Information */}
             <Card className="border-green-200 bg-green-50/30">
               <CardHeader className="pb-3">
@@ -2070,16 +1916,6 @@ export function CreateManualProfileForm({
                       rows={3}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="messageToStudents">Message to Students</Label>
-                    <Textarea
-                      id="messageToStudents"
-                      placeholder="Share a message with your students"
-                      value={formData.messageToStudents}
-                      onChange={(e) => handleInputChange("messageToStudents", e.target.value)}
-                      rows={3}
-                    />
-                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -2116,96 +1952,6 @@ export function CreateManualProfileForm({
                     onChange={(e) => handleInputChange("bio", e.target.value)}
                     rows={4}
                   />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Social Media */}
-            <Card className="p-6">
-              <CardHeader className="px-0 pt-0 pb-4">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Share2 className="h-5 w-5 text-purple-600" />
-                  Social Media (Optional)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-0 pb-0 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="socialMediaFacebook">Facebook</Label>
-                    <Input
-                      id="socialMediaFacebook"
-                      placeholder="@juan.delacruz"
-                      value={formData.socialMediaFacebook}
-                      onChange={(e) => handleInputChange("socialMediaFacebook", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="socialMediaInstagram">Instagram</Label>
-                    <Input
-                      id="socialMediaInstagram"
-                      placeholder="@juandelacruz"
-                      value={formData.socialMediaInstagram}
-                      onChange={(e) => handleInputChange("socialMediaInstagram", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="socialMediaTwitter">Twitter/X</Label>
-                    <Input
-                      id="socialMediaTwitter"
-                      placeholder="@juandelacruz"
-                      value={formData.socialMediaTwitter}
-                      onChange={(e) => handleInputChange("socialMediaTwitter", e.target.value)}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Yearbook Information */}
-            <Card className="p-6">
-              <CardHeader className="px-0 pt-0 pb-4">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-pink-600" />
-                  Yearbook Information
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-0 pb-0 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="sayingMotto">
-                    Teaching Philosophy/Motto *
-                  </Label>
-                  <Textarea
-                    id="sayingMotto"
-                    placeholder="Share your teaching philosophy or motto"
-                    value={formData.sayingMotto}
-                    onChange={(e) => handleInputChange("sayingMotto", e.target.value)}
-                    rows={2}
-                    className={errors.sayingMotto ? "border-red-500" : ""}
-                  />
-                  {errors.sayingMotto && <p className="text-sm text-red-600">{errors.sayingMotto}</p>}
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="achievements">Achievements/Honors</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={newAchievement}
-                      onChange={(e) => setNewAchievement(e.target.value)}
-                      placeholder="Add an achievement..."
-                      onKeyPress={(e) => e.key === "Enter" && addAchievement()}
-                    />
-                    <Button onClick={addAchievement} size="sm">
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {achievements.map((achievement, index) => (
-                      <Badge key={index} variant="secondary" className="flex items-center gap-1">
-                        {achievement}
-                        <X className="h-3 w-3 cursor-pointer" onClick={() => removeAchievement(index)} />
-                      </Badge>
-                    ))}
-                  </div>
                 </div>
               </CardContent>
             </Card>

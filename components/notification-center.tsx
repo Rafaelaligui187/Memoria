@@ -53,13 +53,21 @@ export function NotificationCenter() {
     try {
       setLoading(true)
       const adminEmail = user?.email ? encodeURIComponent(user.email) : ''
+      console.log('📡 Fetching notifications for admin:', adminEmail)
       const response = await fetch(`/api/admin/notifications?limit=50&adminEmail=${adminEmail}`)
       const result = await response.json()
+      
+      console.log('📡 Notifications fetch result:', result)
       
       if (result.success) {
         setNotifications(result.data || [])
         setUnreadCount(result.unreadCount || 0)
         setUrgentCount(result.urgentCount || 0)
+        console.log('✅ Notifications updated:', {
+          total: result.data?.length || 0,
+          unread: result.unreadCount || 0,
+          urgent: result.urgentCount || 0
+        })
       } else {
         console.error('Failed to fetch notifications:', result.error)
         toast({
@@ -180,6 +188,49 @@ export function NotificationCenter() {
     }
   }
 
+  const handleDeleteAllNotifications = async () => {
+    console.log('🗑️ Delete All button clicked!')
+    try {
+      console.log('📡 Sending delete all request to API...')
+      const response = await fetch('/api/admin/notifications', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ action: 'delete_all' })
+      })
+      
+      console.log('📡 API response status:', response.status)
+      
+      if (response.ok) {
+        const result = await response.json()
+        console.log('✅ Delete All successful:', result)
+        setNotifications([])
+        setUnreadCount(0)
+        setUrgentCount(0)
+        toast({
+          title: "Success",
+          description: "All notifications deleted",
+        })
+      } else {
+        const errorResult = await response.json()
+        console.error('❌ Delete All failed:', errorResult)
+        toast({
+          title: "Error",
+          description: "Failed to delete all notifications",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('❌ Error deleting all notifications:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete all notifications",
+        variant: "destructive",
+      })
+    }
+  }
+
   const getNotificationIcon = (type: string, priority: string) => {
     if (priority === "urgent") {
       return <AlertTriangle className="h-4 w-4 text-red-500" />
@@ -248,10 +299,31 @@ export function NotificationCenter() {
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="font-semibold">Notifications</h3>
           <div className="flex items-center gap-2">
+            {console.log('🔍 Button render check:', { unreadCount, notificationsLength: notifications.length })}
             {unreadCount > 0 && (
               <Button variant="ghost" size="sm" onClick={handleMarkAllAsRead}>
                 <Check className="h-4 w-4 mr-1" />
                 Mark all read
+              </Button>
+            )}
+            {notifications.length > 0 && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => {
+                  console.log('🔘 Delete All button clicked, notifications count:', notifications.length)
+                  if (confirm('Are you sure you want to delete all notifications? This action cannot be undone.')) {
+                    console.log('✅ User confirmed deletion')
+                    handleDeleteAllNotifications()
+                  } else {
+                    console.log('❌ User cancelled deletion')
+                  }
+                }}
+                className="text-red-600 hover:text-red-800 hover:bg-red-50 border border-red-200"
+                title="Delete all notifications"
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Delete All
               </Button>
             )}
             <Button variant="ghost" size="sm" onClick={fetchNotifications}>

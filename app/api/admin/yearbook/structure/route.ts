@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { connectToDatabase } from "@/lib/mongodb/connection"
 import { YEARBOOK_COLLECTIONS } from "@/lib/yearbook-schemas"
+import { COLLEGE_YEAR_LEVEL_NAMES } from "@/lib/college-year-levels"
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,6 +14,10 @@ export async function GET(request: NextRequest) {
         error: 'School year ID is required'
       }, { status: 400 })
     }
+
+    // Add caching headers for better performance
+    const headers = new Headers()
+    headers.set('Cache-Control', 'public, s-maxage=300, stale-while-revalidate=600') // 5 min cache, 10 min stale
 
     const db = await connectToDatabase()
     
@@ -118,7 +123,7 @@ export async function GET(request: NextRequest) {
                     }))
 
                   return {
-                    id: section.name.toLowerCase().replace(/\s+/g, '-'),
+                    id: section._id.toString(), // Use actual MongoDB _id
                     name: section.name,
                     studentCount: students.length,
                     officerCount: officers.length,
@@ -206,7 +211,7 @@ export async function GET(request: NextRequest) {
                       }))
 
                     return {
-                      id: section.name.toLowerCase().replace(/\s+/g, '-'),
+                      id: section._id.toString(), // Use actual MongoDB _id
                       name: `${strand.name} ${section.name}`, // Format as "STRAND SECTION"
                       studentCount: students.length,
                       officerCount: officers.length,
@@ -267,8 +272,8 @@ export async function GET(request: NextRequest) {
           // If we have actual courses in the database, use those with blocks from sections
           if (dbCourses.length > 0) {
             const courses = dbCourses.map(course => {
-              // Define predefined year levels for College courses
-              const predefinedYearLevels = ['1st Year', '2nd Year', '3rd Year', '4th Year']
+              // Use shared predefined year levels for College courses
+              const predefinedYearLevels = COLLEGE_YEAR_LEVEL_NAMES
               
               // Get majors for this course from the course-majors collection
               const courseMajorsForThisCourse = courseMajors.filter(cm => 
@@ -367,14 +372,18 @@ export async function GET(request: NextRequest) {
                     return {
                       id: yearLevel.toLowerCase().replace(/\s+/g, '-'),
                       level: yearLevel,
-                      blocks: Array.from(allBlocks.entries()).map(([blockName, block]) => ({
-                        id: blockName.toLowerCase().replace(/\s+/g, '-'),
-                        name: blockName,
-                        studentCount: block.students.length,
-                        officerCount: block.officers.length,
-                        students: block.students,
-                        officers: block.officers
-                      }))
+                      blocks: Array.from(allBlocks.entries()).map(([blockName, block]) => {
+                        // Find the actual section object to get its _id
+                        const actualSection = sectionBlocks.find(sb => sb.name === blockName)
+                        return {
+                          id: actualSection ? actualSection._id.toString() : blockName.toLowerCase().replace(/\s+/g, '-'),
+                          name: blockName,
+                          studentCount: block.students.length,
+                          officerCount: block.officers.length,
+                          students: block.students,
+                          officers: block.officers
+                        }
+                      })
                     }
                   })
 
@@ -435,7 +444,7 @@ export async function GET(request: NextRequest) {
                         }))
 
                       return {
-                        id: block.name.toLowerCase().replace(/\s+/g, '-'),
+                        id: block._id.toString(), // Use actual MongoDB _id
                         name: block.name,
                         studentCount: students.length,
                         officerCount: officers.length,
@@ -554,8 +563,8 @@ export async function GET(request: NextRequest) {
           console.log('Found course majors:', courseMajors.length)
           
           const courses = dbCourses.map(course => {
-            // Define predefined year levels for College courses
-            const predefinedYearLevels = ['1st Year', '2nd Year', '3rd Year', '4th Year']
+            // Use shared predefined year levels for College courses
+            const predefinedYearLevels = COLLEGE_YEAR_LEVEL_NAMES
             
             // Find profiles for this course
             const courseProfiles = profiles.filter(profile => 
@@ -630,7 +639,7 @@ export async function GET(request: NextRequest) {
                     id: yearLevel.toLowerCase().replace(/\s+/g, '-'),
                     level: yearLevel,
                     blocks: Array.from(existingBlocks.entries()).map(([blockName, block]) => ({
-                      id: blockName.toLowerCase().replace(/\s+/g, '-'),
+                      id: blockName.toLowerCase().replace(/\s+/g, '-'), // This is profile-based, not section-based
                       name: blockName,
                       studentCount: block.students.length,
                       officerCount: block.officers.length,
@@ -708,7 +717,7 @@ export async function GET(request: NextRequest) {
                   id: yearLevel.toLowerCase().replace(/\s+/g, '-'),
                   level: yearLevel,
                   blocks: Array.from(existingBlocks.entries()).map(([blockName, block]) => ({
-                    id: blockName.toLowerCase().replace(/\s+/g, '-'),
+                    id: blockName.toLowerCase().replace(/\s+/g, '-'), // This is profile-based, not section-based
                     name: blockName,
                     studentCount: block.students.length,
                     officerCount: block.officers.length,
@@ -751,7 +760,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       data: structure
-    })
+    }, { headers })
 
   } catch (error) {
     console.error('Error fetching yearbook structure:', error)

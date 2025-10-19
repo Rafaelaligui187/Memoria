@@ -164,6 +164,15 @@ export async function PATCH(request: NextRequest) {
       })
     }
 
+    if (action === 'delete_all') {
+      const result = await notificationsCollection.deleteMany({})
+      return NextResponse.json({
+        success: true,
+        message: 'All notifications deleted',
+        deletedCount: result.deletedCount
+      })
+    }
+
     if (!notificationId) {
       return NextResponse.json({
         success: false,

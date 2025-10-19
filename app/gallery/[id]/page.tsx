@@ -150,19 +150,33 @@ export default function GalleryDetailPage({ params }: { params: { id: string } }
     )
   }
 
-  if (error || !album) {
+  if (error) {
     return (
       <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
         <Header />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-red-600 mb-4">{error || 'Album not found'}</p>
+            <p className="text-red-600 mb-4">{error}</p>
             <Link href="/gallery">
               <Button variant="outline">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Back to Gallery
               </Button>
             </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!album) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gradient-to-br from-slate-50 via-blue-50/30 to-indigo-50/20">
+        <Header />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+            <p className="text-gray-600">Loading album...</p>
           </div>
         </div>
       </div>

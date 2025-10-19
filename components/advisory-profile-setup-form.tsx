@@ -69,9 +69,9 @@ export function AdvisoryProfileSetupForm({
     
     // Academic Information (for advisory roles)
     academicDepartment: "",
-    academicYearLevels: [],
+    academicYearLevels: "[]",
     academicCourseProgram: "",
-    academicSections: [],
+    academicSections: "[]",
 
     // Additional Info
     courses: "",
@@ -110,24 +110,32 @@ export function AdvisoryProfileSetupForm({
     const file = event.target.files?.[0]
     if (!file) return
 
-    const validation = validateImageFile(file)
-    if (!validation.isValid) {
+    const validationResult = validateImageFile(file)
+    if (typeof validationResult === "string") {
       toast({
         title: "Invalid Image",
-        description: validation.error,
+        description: validationResult,
         variant: "destructive",
       })
       return
     }
 
     try {
-      const imageUrl = await uploadProfileImage(file)
-      setProfilePhoto(imageUrl)
-      handleInputChange("profilePicture", imageUrl)
-      toast({
-        title: "Success",
-        description: "Profile picture uploaded successfully!",
-      })
+      const uploadResult = await uploadProfileImage(file)
+      if (uploadResult.success && uploadResult.url) {
+        setProfilePhoto(uploadResult.url)
+        handleInputChange("profilePicture", uploadResult.url)
+        toast({
+          title: "Success",
+          description: "Profile picture uploaded successfully!",
+        })
+      } else {
+        toast({
+          title: "Upload failed",
+          description: uploadResult.error || "Failed to upload image",
+          variant: "destructive",
+        })
+      }
     } catch (error) {
       toast({
         title: "Upload Failed",
@@ -193,8 +201,9 @@ export function AdvisoryProfileSetupForm({
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          ...profileData,
           schoolYearId,
+          userType: "advisory",
+          profileData,
           userId,
         }),
       })
@@ -255,7 +264,7 @@ export function AdvisoryProfileSetupForm({
             <div className="relative">
               <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-gray-200">
                 <Image
-                  src={profilePhoto || getImagePreviewUrl(formData.profilePicture) || "/placeholder-user.jpg"}
+                  src={profilePhoto || formData.profilePicture || "/placeholder-user.jpg"}
                   alt="Profile"
                   width={96}
                   height={96}
@@ -469,16 +478,6 @@ export function AdvisoryProfileSetupForm({
                 rows={3}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="messageToStudents">Message to Students</Label>
-              <Textarea
-                id="messageToStudents"
-                placeholder="Share a message with your students"
-                value={formData.messageToStudents}
-                onChange={(e) => handleInputChange("messageToStudents", e.target.value)}
-                rows={3}
-              />
-            </div>
           </div>
         </CardContent>
       </Card>
@@ -488,9 +487,10 @@ export function AdvisoryProfileSetupForm({
         schoolYearId={schoolYearId}
         formData={{
           academicDepartment: formData.academicDepartment || "",
-          academicYearLevels: formData.academicYearLevels || [],
+          academicYearLevels: formData.academicYearLevels || "[]",
           academicCourseProgram: formData.academicCourseProgram || "",
-          academicSections: formData.academicSections || []
+          academicSections: formData.academicSections || "[]",
+          messageToStudents: formData.messageToStudents || ""
         }}
         onInputChange={handleInputChange}
         errors={errors}

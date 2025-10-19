@@ -86,6 +86,7 @@ export default function JuniorHighYearbookPage({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [schoolYearLabel, setSchoolYearLabel] = useState<string>("")
+  const [classMotto, setClassMotto] = useState<string>("")
 
   const grade = (grades as any)[params.gradeId]
   if (!grade) {
@@ -198,9 +199,65 @@ export default function JuniorHighYearbookPage({
     }
   }
 
+  // Fetch class motto from advisory profiles
+  const fetchClassMotto = async () => {
+    try {
+      if (!grade || !section) return
+
+      // Build query parameters for advisory profiles
+      const queryParams = new URLSearchParams({
+        department: 'Junior High',
+        schoolYearId: params.schoolYearId,
+        status: 'approved',
+        yearLevel: grade.name,
+        courseProgram: 'Junior High',
+        blockSection: section.name === 'Section A' ? 'A' : section.name === 'Section B' ? 'B' : section.name
+      })
+
+      console.log("[Junior High] Fetching class motto with params:", queryParams.toString())
+
+      const response = await fetch(`/api/yearbook?${queryParams.toString()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        // Find advisory profile for this class
+        const advisoryProfile = result.data.find((profile: any) => 
+          profile.isAdvisoryEntry && 
+          profile.userType === 'advisory' &&
+          profile.messageToStudents
+        )
+
+        if (advisoryProfile && advisoryProfile.messageToStudents) {
+          console.log("[Junior High] Found class motto:", advisoryProfile.messageToStudents)
+          setClassMotto(advisoryProfile.messageToStudents)
+        } else {
+          console.log("[Junior High] No class motto found for this class")
+          setClassMotto("")
+        }
+      } else {
+        console.error("[Junior High] Failed to fetch profiles for motto:", result.error)
+        setClassMotto("")
+      }
+    } catch (err) {
+      console.error("[Junior High] Error fetching class motto:", err)
+      setClassMotto("")
+    }
+  }
+
   useEffect(() => {
     fetchApprovedProfiles()
   }, [params.gradeId, params.sectionId, params.schoolYearId, grade.name, section.name])
+
+  // Fetch class motto when grade and section data is available
+  useEffect(() => {
+    fetchClassMotto()
+  }, [grade, section, params.schoolYearId])
 
   // Auto-refresh when profiles are approved or created
   useYearbookAutoRefresh({
@@ -254,6 +311,7 @@ export default function JuniorHighYearbookPage({
       academicYear={schoolYearLabel || params.schoolYearId}
       people={people}
       activities={[]} // Activities can be added later if needed
+      motto={classMotto}
       backLink={`/school-years-junior-high/${params.schoolYearId}/departments/junior-high/${params.gradeId}`}
       profileBasePath={`/school-years-junior-high/${params.schoolYearId}/departments/junior-high/${params.gradeId}/${params.sectionId}/yearbook`}
       yearId={params.gradeId}

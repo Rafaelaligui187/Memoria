@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { connectToDatabase } from '@/lib/mongodb/connection'
+import { yearbookService } from '@/lib/yearbook-service'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -69,13 +70,25 @@ export async function GET(request: NextRequest) {
     if (blockSection) {
       // Handle different block section formats
       if (department === 'College') {
-        // For College, the database stores "Block A", "Block B", etc.
-        // but the API might receive "A", "B", etc.
-        if (blockSection.length === 1) {
-          filters.blockSection = `Block ${blockSection}`
-        } else {
-          filters.blockSection = blockSection
-        }
+        // For College, profiles can be stored with various block section formats:
+        // - "Block A", "Block B", etc. (from predefined blocks)
+        // - Actual section names from the sections collection
+        // - Single letters like "A", "B", etc.
+        
+        // Try multiple formats to match the block section
+        const possibleFormats = [
+          blockSection, // Original format
+          `Block ${blockSection}`, // If it's a single letter
+          blockSection.replace('Block ', ''), // If it starts with "Block "
+        ]
+        
+        // Remove duplicates
+        const uniqueFormats = [...new Set(possibleFormats)]
+        
+        // Use $in operator to match any of the possible formats
+        filters.blockSection = { $in: uniqueFormats }
+        
+        console.log(`🔍 College block section matching formats:`, uniqueFormats)
       } else {
         filters.blockSection = blockSection
       }
@@ -87,17 +100,20 @@ export async function GET(request: NextRequest) {
     const data = await collection.find(filters).toArray()
     console.log(`✅ Query executed - found ${data.length} results`)
     
-    // Debug: Log all profiles with their yearLevel to understand the data format
-    if (yearLevel) {
+    // Debug: Log all profiles with their details to understand the data format
+    if (yearLevel || courseProgram || blockSection) {
       const allProfiles = await collection.find({ schoolYearId }).toArray()
-      console.log(`🔍 Debug: All profiles in collection:`, allProfiles.map(p => ({
+      console.log(`🔍 Debug: All profiles in collection (${allProfiles.length} total):`, allProfiles.map(p => ({
         name: p.fullName,
         yearLevel: p.yearLevel,
+        courseProgram: p.courseProgram,
+        blockSection: p.blockSection,
         academicYearLevels: p.academicYearLevels,
         isAdvisoryEntry: p.isAdvisoryEntry,
-        userType: p.userType
+        userType: p.userType,
+        status: p.status
       })))
-      console.log(`🔍 Debug: Looking for yearLevel: "${yearLevel}"`)
+      console.log(`🔍 Debug: Looking for - yearLevel: "${yearLevel}", courseProgram: "${courseProgram}", blockSection: "${blockSection}"`)
     }
 
     // Transform data

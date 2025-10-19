@@ -323,14 +323,14 @@ export function AdvisoryForm({
           </div>
         </div>
 
-        {/* Message to Students */}
+        {/* Class Motto */}
         <div className="space-y-2">
-          <Label htmlFor="messageToStudents">Message to Students *</Label>
+          <Label htmlFor="messageToStudents">Class Motto *</Label>
           <textarea
             id="messageToStudents"
             value={formData.messageToStudents || ""}
             onChange={(e) => onInputChange("messageToStudents", e.target.value)}
-            placeholder="Share your message, advice, or encouragement to students..."
+            placeholder="Share your class motto, inspiration, or guiding principle..."
             className={`w-full p-3 border rounded-lg resize-none h-24 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
               errors.messageToStudents ? "border-red-500" : "border-gray-300"
             }`}

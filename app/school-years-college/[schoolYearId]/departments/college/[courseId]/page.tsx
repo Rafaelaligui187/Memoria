@@ -63,12 +63,12 @@ export default function CoursePage({
     }
   }, [majors, selectedMajor])
 
-  // Fetch course data and year levels from API
+  // Optimized data fetching with proper loading states
   useEffect(() => {
     const fetchCourseData = async () => {
       try {
         console.log('🔍 [College Course] Starting data fetch for courseId:', courseId)
-        // Don't set loading to true here to prevent flickering
+        setLoading(true)
         setError(null)
         
         // Create fallback course data based on courseId
@@ -79,60 +79,48 @@ export default function CoursePage({
           description: `The ${courseId.toUpperCase().replace('-', ' ')} program provides comprehensive education and training in this field.`
         }
         
-        console.log('🔍 [College Course] Fallback data created:', fallbackCourseData)
+        // Set fallback data immediately to prevent flickering
+        setCourseData(fallbackCourseData)
         
-        // Try to fetch course details, but don't fail if it doesn't exist
-        try {
-          console.log('🔍 [College Course] Attempting to fetch course data from API...')
-          const courseResponse = await fetch(`/api/admin/courses?id=${courseId}`)
-          const courseResult = await courseResponse.json()
-          
-          if (courseResult.success && courseResult.data) {
-            setCourseData(courseResult.data)
-            console.log('✅ [College Course] Course data loaded from API:', courseResult.data)
-          } else {
-            // Use fallback data if course not found in API
-            setCourseData(fallbackCourseData)
-            console.log('⚠️ [College Course] Using fallback course data:', fallbackCourseData)
+        // Don't set predefined year levels - let API data load first
+        // This prevents showing hardcoded blocks before real data
+        
+        // Make lightweight parallel API calls for better performance
+        const [courseResponse, structureResponse] = await Promise.allSettled([
+          fetch(`/api/admin/courses?id=${courseId}`),
+          fetch(`/api/admin/college/structure?schoolYearId=${params.schoolYearId}&courseId=${courseId}`)
+        ])
+        
+        // Process course data
+        if (courseResponse.status === 'fulfilled') {
+          try {
+            const courseResult = await courseResponse.value.json()
+            if (courseResult.success && courseResult.data) {
+              setCourseData(courseResult.data)
+              console.log('✅ [College Course] Course data loaded from API')
+            }
+          } catch (courseErr) {
+            console.warn('❌ [College Course] Course API failed, using fallback data')
           }
-        } catch (courseErr) {
-          console.warn('❌ [College Course] Course API failed, using fallback data:', courseErr)
-          setCourseData(fallbackCourseData)
         }
-
-        // Always set predefined year levels with blocks
-        const predefinedYearLevels = [
-          { id: '1st-year', level: '1st Year', blocks: [{ id: 'block-a', name: 'Block A' }, { id: 'block-b', name: 'Block B' }] },
-          { id: '2nd-year', level: '2nd Year', blocks: [{ id: 'block-a', name: 'Block A' }, { id: 'block-b', name: 'Block B' }] },
-          { id: '3rd-year', level: '3rd Year', blocks: [{ id: 'block-a', name: 'Block A' }, { id: 'block-b', name: 'Block B' }] },
-          { id: '4th-year', level: '4th Year', blocks: [{ id: 'block-a', name: 'Block A' }, { id: 'block-b', name: 'Block B' }, { id: 'block-c', name: 'Block C' }, { id: 'block-d', name: 'Block D' }] }
-        ]
-        setYearLevels(predefinedYearLevels)
-        console.log('✅ Predefined year levels set:', predefinedYearLevels.length, 'years')
         
-        // Try to fetch yearbook structure, but don't fail if it doesn't exist
-        try {
-          const structureResponse = await fetch(`/api/admin/yearbook/structure?schoolYearId=${params.schoolYearId}`)
-          const structureResult = await structureResponse.json()
-          
-          if (structureResult.success && structureResult.data) {
-            const collegeDept = structureResult.data.departments.find((dept: any) => dept.type === 'college')
-            if (collegeDept) {
-              const course = collegeDept.courses.find((c: any) => c.id === courseId)
+        // Process structure data
+        if (structureResponse.status === 'fulfilled') {
+          try {
+            const structureResult = await structureResponse.value.json()
+            
+            if (structureResult.success && structureResult.data) {
+              const course = structureResult.data
               if (course) {
                 // Set majors if the course has them
                 if (course.majors && course.majors.length > 0) {
                   setMajors(course.majors)
-                  // Automatically select the first major
                   setSelectedMajor(course.majors[0].name)
-                  console.log('Majors loaded from structure:', course.majors)
-                  console.log('Auto-selected first major:', course.majors[0].name)
+                  console.log('✅ Majors loaded from structure')
                 }
                 
-                // Set year levels (either from majors or directly from course)
+                // Set year levels with actual data from API
                 if (course.majorType === 'has-major' && course.majors && course.majors.length > 0) {
-                  // For courses with majors, year levels are nested under majors
-                  // We'll flatten them for display
                   const allYearLevels: any[] = []
                   course.majors.forEach((major: any) => {
                     major.yearLevels.forEach((yearLevel: any) => {
@@ -143,16 +131,16 @@ export default function CoursePage({
                     })
                   })
                   setYearLevels(allYearLevels)
-                  console.log('Year levels loaded from majors:', allYearLevels)
+                  console.log('✅ Year levels loaded from majors')
                 } else if (course.yearLevels) {
                   setYearLevels(course.yearLevels)
-                  console.log('Year levels loaded from structure:', course.yearLevels)
+                  console.log('✅ Year levels loaded from structure')
                 }
               }
             }
+          } catch (structureErr) {
+            console.warn('❌ Structure API failed, will show loading state')
           }
-        } catch (structureErr) {
-          console.warn('Structure API failed, using predefined year levels:', structureErr)
         }
         
       } catch (err) {
@@ -300,53 +288,55 @@ export default function CoursePage({
           </div>
 
           <div className="space-y-8">
-            {(selectedMajor 
-              ? yearLevels.filter(year => year.majorName === selectedMajor)
-              : yearLevels
-            ).map((year) => (
-              <div key={year.id} className="bg-white rounded-xl shadow-sm border border-purple-100 p-8">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-                  <div className="mb-6 md:mb-0">
-                    <div className="flex items-center gap-3 mb-2">
-                      <h3 className="text-2xl font-semibold text-gray-900">{year.level}</h3>
-                      {year.majorName && (
-                        <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium">
-                          {year.majorName}
+            {['1st Year', '2nd Year', '3rd Year', '4th Year'].map((yearLevel) => {
+              const filteredYearLevels = selectedMajor 
+                ? yearLevels.filter(year => year.majorName === selectedMajor)
+                : yearLevels
+              const yearData = filteredYearLevels.find(year => year.level === yearLevel)
+              return (
+                <div key={yearLevel} className="bg-white rounded-xl shadow-sm border border-purple-100 p-8">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+                    <div className="mb-6 md:mb-0">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-2xl font-semibold text-gray-900">{yearLevel}</h3>
+                        {yearData?.majorName && (
+                          <span className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm font-medium">
+                            {yearData.majorName}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center text-gray-600">
+                        <Users className="h-4 w-4 mr-2" />
+                        <span>
+                          {loading ? "Loading..." : yearData ? `${yearData.blocks.length} Block${yearData.blocks.length > 1 ? "s" : ""} Available` : "No blocks available"}
                         </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {loading ? (
+                        <div className="animate-pulse">
+                          <div className="h-10 bg-gray-200 rounded-lg w-24"></div>
+                        </div>
+                      ) : yearData && yearData.blocks.length > 0 ? (
+                        yearData.blocks.map((block) => (
+                          <Link key={block.id} href={`/school-years-college/${params.schoolYearId}/departments/college/${courseId}/${yearData.id}/${block.id}`}>
+                            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-4 py-2 rounded-md font-medium transition-all duration-200 hover:shadow-lg hover:scale-105 text-sm">
+                              {block.name}
+                            </div>
+                          </Link>
+                        ))
+                      ) : (
+                        <div className="text-gray-500 text-sm">No blocks available</div>
                       )}
                     </div>
-                    <div className="flex items-center text-gray-600">
-                      <Users className="h-4 w-4 mr-2" />
-                      <span>
-                        {year.blocks.length} Block{year.blocks.length > 1 ? "s" : ""} Available
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    {year.blocks.map((block) => (
-                      <Link key={block.id} href={`/school-years-college/${params.schoolYearId}/departments/college/${courseId}/${year.id}/${block.id}`}>
-                        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-4 py-2 rounded-md font-medium transition-all duration-200 hover:shadow-lg hover:scale-105 text-sm">
-                          {block.name}
-                        </div>
-                      </Link>
-                    ))}
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </div>
-
-      {/* Simple Footer */}
-      <footer className="bg-gray-100 py-8 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center text-gray-600">
-            <p>&copy; 2024 {courseData?.name || 'Course'} Program. All rights reserved.</p>
-          </div>
-        </div>
-      </footer>
     </div>
   )
 }

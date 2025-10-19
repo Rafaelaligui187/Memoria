@@ -1726,15 +1726,16 @@ export function UnifiedProfileSetupForm({
                 </div>
 
 
-                {(selectedRole === "faculty" || selectedRole === "staff" || selectedRole === "utility" || selectedRole === "ar-sisters") && (
+                {(selectedRole === "faculty" || selectedRole === "staff" || selectedRole === "utility" || selectedRole === "ar-sisters" || selectedRole === "advisory") && (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor="messageToStudents">
-                        {selectedRole === "faculty" ? "Message to Students *" : "Message to Students"}
+                        {selectedRole === "faculty" ? "Message to Students *" : 
+                         selectedRole === "advisory" ? "Class Motto" : "Message to Students"}
                       </Label>
                       <Textarea
                         id="messageToStudents"
-                        placeholder="Always stay curious."
+                        placeholder={selectedRole === "advisory" ? "Share your class motto, inspiration, or guiding principle" : "Always stay curious."}
                         value={formData.messageToStudents}
                         onChange={(e) => handleInputChange("messageToStudents", e.target.value)}
                         className={errors.messageToStudents ? "border-red-500" : ""}

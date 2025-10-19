@@ -31,13 +31,39 @@ export async function GET(request: NextRequest) {
     const collection = db.collection('sections')
     
     const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
     const department = searchParams.get('department')
     const schoolYearId = searchParams.get('schoolYearId')
     const grade = searchParams.get('grade')
     const strandId = searchParams.get('strandId')
     const strandName = searchParams.get('strandName')
     
-    // Build query
+    // If ID is provided, fetch specific section
+    if (id) {
+      try {
+        const section = await collection.findOne({ _id: new ObjectId(id) })
+        
+        if (!section) {
+          return NextResponse.json({
+            success: false,
+            error: 'Section not found'
+          }, { status: 404 })
+        }
+        
+        return NextResponse.json({
+          success: true,
+          data: section
+        })
+      } catch (error) {
+        console.error('Error fetching section by ID:', error)
+        return NextResponse.json({
+          success: false,
+          error: 'Invalid section ID'
+        }, { status: 400 })
+      }
+    }
+    
+    // Build query for multiple sections
     const query: any = {}
     
     if (department) {

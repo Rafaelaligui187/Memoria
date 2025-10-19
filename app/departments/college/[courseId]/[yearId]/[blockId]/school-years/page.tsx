@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { ArrowLeft, Users, Loader2 } from "lucide-react"
+import { getCourseFullName, getCourseShortName, getYearName, getBlockName } from "@/lib/college-year-levels"
 
 interface SchoolYear {
   _id: string
@@ -24,49 +25,11 @@ export default function SchoolYearsPage({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Course map
-  const courseFullNames: Record<string, string> = {
-    bsit: "Bachelor of Science in Information Technology",
-    beed: "Bachelor of Elementary Education",
-    bsed: "Bachelor of Secondary Education",
-    bshm: "Bachelor of Science in Hospitality Management",
-    bsentrep: "Bachelor of Science in Entrepreneurship",
-    bscs: "Bachelor of Science in Computer Science",
-    bped: "Bachelor of Physical Education",
-  }
-
-  const courseNames: Record<string, string> = {
-    bsit: "BSIT",
-    beed: "BEED",
-    bsed: "BSED",
-    bshm: "BSHM",
-    bsentrep: "BSENTREP",
-    bscs: "BSCS",
-    bped: "BPED",
-  }
-
-  // Year names
-  const yearNames: Record<string, string> = {
-    "1st-year": "First Year",
-    "2nd-year": "Second Year",
-    "3rd-year": "Third Year",
-    "4th-year": "Fourth Year",
-  }
-
-  // Block names
-  const blockNames: Record<string, string> = {
-    "block-a": "Block A",
-    "block-b": "Block B",
-    "block-c": "Block C",
-    "block-d": "Block D",
-    "block-e": "Block E",
-    "block-f": "Block F",
-  }
-
-  const courseFullName = courseFullNames[params.courseId] || "Course"
-  const courseName = courseNames[params.courseId] || "Course"
-  const yearName = yearNames[params.yearId] || "Year"
-  const blockName = blockNames[params.blockId] || "Block"
+  // Use shared utility functions
+  const courseFullName = getCourseFullName(params.courseId)
+  const courseName = getCourseShortName(params.courseId)
+  const yearName = getYearName(params.yearId)
+  const blockName = getBlockName(params.blockId)
 
   // Fetch school years from API
   useEffect(() => {

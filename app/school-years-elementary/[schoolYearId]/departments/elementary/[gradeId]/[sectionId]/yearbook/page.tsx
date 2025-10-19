@@ -102,6 +102,7 @@ export default function ElementaryYearbookPage({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [schoolYearLabel, setSchoolYearLabel] = useState<string>("")
+  const [classMotto, setClassMotto] = useState<string>("")
 
   // Normalize gradeId (convert "grade-1" to "grade1")
   const normalizedGradeId = params.gradeId.replace('grade-', 'grade')
@@ -216,9 +217,65 @@ export default function ElementaryYearbookPage({
     }
   }
 
+  // Fetch class motto from advisory profiles
+  const fetchClassMotto = async () => {
+    try {
+      if (!grade || !section) return
+
+      // Build query parameters for advisory profiles
+      const queryParams = new URLSearchParams({
+        department: 'Elementary',
+        schoolYearId: params.schoolYearId,
+        status: 'approved',
+        yearLevel: grade.name,
+        courseProgram: 'Elementary',
+        blockSection: section.name === 'Section A' ? 'A' : section.name === 'Section B' ? 'B' : section.name
+      })
+
+      console.log("[Elementary] Fetching class motto with params:", queryParams.toString())
+
+      const response = await fetch(`/api/yearbook?${queryParams.toString()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        // Find advisory profile for this class
+        const advisoryProfile = result.data.find((profile: any) => 
+          profile.isAdvisoryEntry && 
+          profile.userType === 'advisory' &&
+          profile.messageToStudents
+        )
+
+        if (advisoryProfile && advisoryProfile.messageToStudents) {
+          console.log("[Elementary] Found class motto:", advisoryProfile.messageToStudents)
+          setClassMotto(advisoryProfile.messageToStudents)
+        } else {
+          console.log("[Elementary] No class motto found for this class")
+          setClassMotto("")
+        }
+      } else {
+        console.error("[Elementary] Failed to fetch profiles for motto:", result.error)
+        setClassMotto("")
+      }
+    } catch (err) {
+      console.error("[Elementary] Error fetching class motto:", err)
+      setClassMotto("")
+    }
+  }
+
   useEffect(() => {
     fetchApprovedProfiles()
   }, [params.gradeId, params.sectionId, params.schoolYearId, grade.name, section.name])
+
+  // Fetch class motto when grade and section data is available
+  useEffect(() => {
+    fetchClassMotto()
+  }, [grade, section, params.schoolYearId])
 
   // Auto-refresh when profiles are approved or created
   useYearbookAutoRefresh({
@@ -272,6 +329,7 @@ export default function ElementaryYearbookPage({
         academicYear={schoolYearLabel || params.schoolYearId}
         people={people}
         activities={[]} // Activities can be added later if needed
+        motto={classMotto}
         backLink={`/school-years-elementary/${params.schoolYearId}/departments/elementary/${params.gradeId}`}
         profileBasePath={`/school-years-elementary/${params.schoolYearId}/departments/elementary/${params.gradeId}/${params.sectionId}/yearbook`}
         yearId={params.gradeId}

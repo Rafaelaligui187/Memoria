@@ -38,6 +38,7 @@ export default function SeniorHighYearbookPage({
   const [strand, setStrand] = useState<any>(null)
   const [year, setYear] = useState<any>(null)
   const [section, setSection] = useState<any>(null)
+  const [classMotto, setClassMotto] = useState<string>("")
 
   // Fetch strand data from API
   useEffect(() => {
@@ -178,9 +179,65 @@ export default function SeniorHighYearbookPage({
     }
   }
 
+  // Fetch class motto from advisory profiles
+  const fetchClassMotto = async () => {
+    try {
+      if (!strand || !year || !section) return
+
+      // Build query parameters for advisory profiles
+      const queryParams = new URLSearchParams({
+        department: 'Senior High',
+        schoolYearId: params.schoolYearId,
+        status: 'approved',
+        yearLevel: year.name,
+        courseProgram: strand.name,
+        blockSection: section.name?.replace(/^(STEM|ABM|HUMSS|TVL|HE|ICT)\s+/, '') || section.name
+      })
+
+      console.log("[Senior High] Fetching class motto with params:", queryParams.toString())
+
+      const response = await fetch(`/api/yearbook?${queryParams.toString()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      })
+
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        // Find advisory profile for this class
+        const advisoryProfile = result.data.find((profile: any) => 
+          profile.isAdvisoryEntry && 
+          profile.userType === 'advisory' &&
+          profile.messageToStudents
+        )
+
+        if (advisoryProfile && advisoryProfile.messageToStudents) {
+          console.log("[Senior High] Found class motto:", advisoryProfile.messageToStudents)
+          setClassMotto(advisoryProfile.messageToStudents)
+        } else {
+          console.log("[Senior High] No class motto found for this class")
+          setClassMotto("")
+        }
+      } else {
+        console.error("[Senior High] Failed to fetch profiles for motto:", result.error)
+        setClassMotto("")
+      }
+    } catch (err) {
+      console.error("[Senior High] Error fetching class motto:", err)
+      setClassMotto("")
+    }
+  }
+
   useEffect(() => {
     fetchApprovedProfiles()
   }, [params.strandId, params.yearId, params.sectionId, params.schoolYearId, strand, year, section])
+
+  // Fetch class motto when strand, year, and section data is available
+  useEffect(() => {
+    fetchClassMotto()
+  }, [strand, year, section, params.schoolYearId])
 
   // Auto-refresh when profiles are approved or created
   useYearbookAutoRefresh({
@@ -234,6 +291,7 @@ export default function SeniorHighYearbookPage({
       academicYear={schoolYearLabel || params.schoolYearId}
       people={people}
       activities={[]} // Activities can be added later if needed
+      motto={classMotto}
       backLink={`/school-years-senior-high/${params.schoolYearId}/departments/senior-high/${params.strandId}`}
       profileBasePath={`/school-years-senior-high/${params.schoolYearId}/departments/senior-high/${params.strandId}/${params.yearId}/${params.sectionId}/yearbook`}
       yearId={params.yearId}
