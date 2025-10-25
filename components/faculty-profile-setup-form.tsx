@@ -418,27 +418,15 @@ export function FacultyProfileSetupForm({
                   <SelectValue placeholder="Select department" />
                 </SelectTrigger>
                 <SelectContent>
-                  {/* Dynamic department options based on position */}
-                  {(formData.position === "Department Head" || formData.position === "Teacher") ? (
-                    <>
-                      <SelectItem value="College of Computer Studies">College of Computer Studies</SelectItem>
-                      <SelectItem value="College of Hospitality Management">College of Hospitality Management</SelectItem>
-                      <SelectItem value="College of Education">College of Education</SelectItem>
-                      <SelectItem value="College of Agriculture">College of Agriculture</SelectItem>
-                      <SelectItem value="Elementary Department">Elementary Department</SelectItem>
-                      <SelectItem value="Junior High School Department">Junior High School Department</SelectItem>
-                      <SelectItem value="Senior High School Department">Senior High School Department</SelectItem>
-                      <SelectItem value="Administration">Administration</SelectItem>
-                    </>
-                  ) : (
-                    <>
-                      <SelectItem value="Elementary">Elementary</SelectItem>
-                      <SelectItem value="Junior High">Junior High</SelectItem>
-                      <SelectItem value="Senior High">Senior High</SelectItem>
-                      <SelectItem value="College">College</SelectItem>
-                      <SelectItem value="Administration">Administration</SelectItem>
-                    </>
-                  )}
+                  {/* Same department options for all faculty roles */}
+                  <SelectItem value="College of Computer Studies">College of Computer Studies</SelectItem>
+                  <SelectItem value="College of Hospitality Management">College of Hospitality Management</SelectItem>
+                  <SelectItem value="College of Education">College of Education</SelectItem>
+                  <SelectItem value="College of Agriculture">College of Agriculture</SelectItem>
+                  <SelectItem value="Elementary Department">Elementary Department</SelectItem>
+                  <SelectItem value="Junior High School Department">Junior High School Department</SelectItem>
+                  <SelectItem value="Senior High School Department">Senior High School Department</SelectItem>
+                  <SelectItem value="Administration">Administration</SelectItem>
                 </SelectContent>
               </Select>
               {errors.departmentAssigned && <p className="text-sm text-red-500">{errors.departmentAssigned}</p>}

@@ -47,52 +47,6 @@ interface UnifiedProfileSetupFormProps {
 
 type UserRole = "student" | "alumni" | "faculty" | "staff" | "utility" | "ar-sisters" | "advisory"
 
-// Dynamic academic data structure
-const departmentData = {
-  "Senior High": {
-    yearLevels: ["Grade 11", "Grade 12"],
-    programs: {
-      STEM: ["STEM 1", "STEM 2", "STEM 3", "STEM 4", "STEM 5"],
-      HUMSS: ["HUMSS 1", "HUMSS 2", "HUMSS 3", "HUMSS 4", "HUMSS 5"],
-      ABM: ["ABM 1", "ABM 2", "ABM 3", "ABM 4", "ABM 5"],
-      TVL: ["TVL 1", "TVL 2", "TVL 3", "TVL 4", "TVL 5"],
-      HE: ["HE 1", "HE 2", "HE 3", "HE 4", "HE 5"],
-      ICT: ["ICT 1", "ICT 2", "ICT 3", "ICT 4", "ICT 5"],
-    },
-  },
-  College: {
-    yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-    programs: {
-      "BS Information Technology": ["IT-A", "IT-B", "IT-C", "IT-D", "IT-E", "IT-F"],
-      "BEED": ["BEED-A", "BEED-B", "BEED-C", "BEED-D", "BEED-E", "BEED-F"],
-      "BSED": ["BSED-A", "BSED-B", "BSED-C", "BSED-D", "BSED-E", "BSED-F"],
-      "BS Hospitality Management": ["HM-A", "HM-B", "HM-C", "HM-D", "HM-E", "HM-F"],
-      "BS Entrepreneurship": ["ENT-A", "ENT-B", "ENT-C", "ENT-D", "ENT-E", "ENT-F"],
-      "BPed": ["PED-A", "PED-B", "PED-C", "PED-D", "PED-E", "PED-F"],
-    },
-  },
-  "Graduate School": {
-    yearLevels: ["Master's", "Doctorate"],
-    programs: {
-      "Master of Science in Computer Science": ["MSCS-A", "MSCS-B"],
-      "Master of Business Administration": ["MBA-A", "MBA-B"],
-      "Doctor of Philosophy": ["PhD-A", "PhD-B"],
-    },
-  },
-  Elementary: {
-    yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
-    programs: {
-      Elementary: ["Section A", "Section B", "Section C", "Section D"],
-    },
-  },
-  "Junior High": {
-    yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
-    programs: {
-      "Junior High": ["Section A", "Section B", "Section C", "Section D"],
-    },
-  },
-}
-
 export function UnifiedProfileSetupForm({
   schoolYearId,
   userId,
@@ -107,6 +61,8 @@ export function UnifiedProfileSetupForm({
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null)
   const [departmentData, setDepartmentData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [isLoadingFormData, setIsLoadingFormData] = useState(true)
+  const [formDataError, setFormDataError] = useState<string | null>(null)
   
   // Academic Information state for faculty
   const [availableAcademicYearLevels, setAvailableAcademicYearLevels] = useState<string[]>([])
@@ -150,9 +106,10 @@ export function UnifiedProfileSetupForm({
     
     // Faculty Academic Information (optional for advisory roles)
     academicDepartment: "",
-    academicYearLevels: "[]",
+    academicYearLevel: "",
     academicCourseProgram: "",
-    academicSections: "[]",
+    academicSection: "",
+    academicMajor: "",
 
     // AR Sisters specific fields
     customPosition: "",
@@ -179,7 +136,6 @@ export function UnifiedProfileSetupForm({
 
     // Faculty-specific additional fields
     courses: "",
-    additionalRoles: "",
 
     // Alumni-specific additional fields
     achievements: "",
@@ -216,6 +172,9 @@ export function UnifiedProfileSetupForm({
   // Fetch dynamic form data
   useEffect(() => {
     const fetchFormData = async () => {
+      setIsLoadingFormData(true)
+      setFormDataError(null)
+      
       try {
         setLoading(true)
         const response = await fetch(`/api/admin/form-data?schoolYearId=${schoolYearId}`)
@@ -228,57 +187,16 @@ export function UnifiedProfileSetupForm({
           console.log('Program details loaded:', result.data.programDetails)
         } else {
           console.error('Failed to fetch form data:', result.error)
-          // Fallback to hardcoded data
-          setDepartmentData({
-            "Elementary": {
-              yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
-              programs: ["Elementary"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-            "Junior High": {
-              yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
-              programs: ["Junior High"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-            "Senior High": {
-              yearLevels: ["Grade 11", "Grade 12"],
-              programs: ["STEM", "ABM", "HUMSS", "GAS", "TVL"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-            "College": {
-              yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-              programs: ["BSIT", "BSCS", "BSIS", "BSA", "BSBA"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-          })
+          setFormDataError(`Failed to load academic data: ${result.error}`)
+          setDepartmentData({})
         }
       } catch (error) {
         console.error('Error fetching form data:', error)
-        // Fallback to hardcoded data
-        setDepartmentData({
-          "Elementary": {
-            yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
-            programs: ["Elementary"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-          "Junior High": {
-            yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
-            programs: ["Junior High"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-          "Senior High": {
-            yearLevels: ["Grade 11", "Grade 12"],
-            programs: ["STEM", "ABM", "HUMSS", "GAS", "TVL"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-          "College": {
-            yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-            programs: ["BSIT", "BSCS", "BSIS", "BSA", "BSBA"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-        })
+        setFormDataError('Failed to connect to database. Please check your connection and try again.')
+        setDepartmentData({})
       } finally {
         setLoading(false)
+        setIsLoadingFormData(false)
       }
     }
 
@@ -613,6 +531,21 @@ export function UnifiedProfileSetupForm({
               if (role) {
                 setSelectedRole(role)
               }
+            } else if (existingProfile.role) {
+              // Fallback: use the role field directly
+              const roleMapping: Record<string, UserRole> = {
+                'Student': 'student',
+                'Faculty': 'faculty',
+                'Staff': 'staff',
+                'Utility': 'utility',
+                'Alumni': 'alumni',
+                'AR Sisters': 'ar-sisters',
+                'Advisory': 'advisory'
+              }
+              const mappedRole = roleMapping[existingProfile.role]
+              if (mappedRole) {
+                setSelectedRole(mappedRole)
+              }
             }
 
             // Handle AR Sisters custom position
@@ -627,6 +560,38 @@ export function UnifiedProfileSetupForm({
                 // Position is custom, set to "Others" and populate customPosition
                 updateField('position', 'Others')
                 updateField('customPosition', existingProfile.position)
+              }
+            }
+
+            // Handle custom department/office assignments for all roles
+            if (existingProfile.departmentAssigned) {
+              const predefinedDepartments = [
+                'College of Computer Studies', 'College of Hospitality Management', 'College of Education',
+                'College of Agriculture', 'Elementary Department', 'Junior High School Department',
+                'Senior High School Department', 'Administration', 'Registrar', 'Finance',
+                'Human Resources', 'IT Department', 'Library', 'Guidance', 'Security',
+                'Maintenance', 'Custodial', 'Groundskeeping', 'IT Support', 'Facilities',
+                'Elementary', 'Junior High', 'Senior High', 'College'
+              ]
+              
+              if (!predefinedDepartments.includes(existingProfile.departmentAssigned)) {
+                // Department is custom, set to "Others" and populate customDepartmentAssigned
+                updateField('departmentAssigned', 'Others')
+                updateField('customDepartmentAssigned', existingProfile.departmentAssigned)
+              }
+            }
+
+            if (existingProfile.officeAssigned) {
+              const predefinedOffices = [
+                'Administration', 'Registrar', 'Finance', 'Human Resources', 'IT Department',
+                'Library', 'Guidance', 'Security', 'Maintenance', 'Custodial',
+                'Groundskeeping', 'IT Support', 'Facilities'
+              ]
+              
+              if (!predefinedOffices.includes(existingProfile.officeAssigned)) {
+                // Office is custom, set to "Others" and populate customOfficeAssigned
+                updateField('officeAssigned', 'Others')
+                updateField('customOfficeAssigned', existingProfile.officeAssigned)
               }
             }
 
@@ -786,6 +751,9 @@ export function UnifiedProfileSetupForm({
         profilePicture: formData.profilePicture,
         sayingMotto: formData.sayingMotto,
         
+        // Profile Creation Method - distinguish between Set Up Profile and Create Manual Profile
+        profileCreationMethod: "set-up-profile",
+        
         // Role-specific data
         ...(selectedRole === "student" && {
           fatherGuardianName: formData.fatherGuardianName,
@@ -804,7 +772,7 @@ export function UnifiedProfileSetupForm({
           officerRole: formData.officerRole,
         }),
         
-        ...(selectedRole === "faculty" || selectedRole === "advisory" && {
+        ...(selectedRole === "faculty" || selectedRole === "advisory" ? {
           position: formData.position,
           department: formData.departmentAssigned === "Others" ? formData.customDepartmentAssigned : formData.departmentAssigned,
           departmentAssigned: formData.departmentAssigned === "Others" ? formData.customDepartmentAssigned : formData.departmentAssigned,
@@ -814,14 +782,22 @@ export function UnifiedProfileSetupForm({
           additionalRoles: formData.additionalRoles,
           // Academic Information for Advisory Roles
           academicDepartment: formData.academicDepartment,
-          academicYearLevels: formData.academicYearLevels,
+          academicYearLevel: formData.academicYearLevel,
           academicCourseProgram: formData.academicCourseProgram,
-          academicSections: formData.academicSections,
+          academicSection: formData.academicSection,
+        } : {}),
+        
+        ...(selectedRole === "staff" && {
+          position: formData.position,
+          department: "Staff", // Staff have their own department
+          officeAssigned: formData.officeAssigned === "Others" ? formData.customOfficeAssigned : formData.officeAssigned,
+          yearsOfService: formData.yearsOfService,
+          messageToStudents: formData.messageToStudents,
         }),
         
-        ...((selectedRole === "staff" || selectedRole === "utility") && {
+        ...(selectedRole === "utility" && {
           position: formData.position,
-          department: "Faculty & Staff", // Staff belong to Faculty &Staff collection
+          department: "Utility", // Utility have their own department
           officeAssigned: formData.officeAssigned === "Others" ? formData.customOfficeAssigned : formData.officeAssigned,
           yearsOfService: formData.yearsOfService,
           messageToStudents: formData.messageToStudents,
@@ -1001,14 +977,44 @@ export function UnifiedProfileSetupForm({
 
   return (
     <div className="space-y-6">
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading form data...</p>
+      {/* Loading State */}
+      {isLoadingFormData && (
+        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+          <div className="flex items-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
+            <div className="text-sm text-yellow-800">
+              <p className="font-medium">Loading academic data...</p>
+              <p>Please wait while we fetch the latest academic information from the database.</p>
+            </div>
           </div>
         </div>
-      ) : (
+      )}
+
+      {/* Error State */}
+      {formDataError && (
+        <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+          <div className="flex items-start gap-2">
+            <div className="w-2 h-2 bg-red-500 rounded-full mt-2"></div>
+            <div className="text-sm text-red-800">
+              <p className="font-medium mb-1">Unable to load academic data</p>
+              <p>{formDataError}</p>
+              <p className="mt-2 text-xs">Please refresh the page or contact support if the issue persists.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Form Content - Only show when data is loaded successfully */}
+      {!isLoadingFormData && !formDataError && (
+        <>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading form data...</p>
+              </div>
+            </div>
+          ) : (
         <>
       <div className="flex items-center gap-3 pb-4 border-b">
         <Button variant="ghost" size="sm" onClick={onBack} className="p-2">
@@ -1609,29 +1615,16 @@ export function UnifiedProfileSetupForm({
                     <SelectContent>
                       {selectedRole === "faculty" ? (
                         <>
-                          {/* Dynamic department options based on position */}
-                          {(formData.position === "Department Head" || formData.position === "Subject Teacher" || formData.position === "Teacher Adviser") ? (
-                            <>
-                              <SelectItem value="College of Computer Studies">College of Computer Studies</SelectItem>
-                              <SelectItem value="College of Hospitality Management">College of Hospitality Management</SelectItem>
-                              <SelectItem value="College of Education">College of Education</SelectItem>
-                              <SelectItem value="College of Agriculture">College of Agriculture</SelectItem>
-                              <SelectItem value="Elementary Department">Elementary Department</SelectItem>
-                              <SelectItem value="Junior High School Department">Junior High School Department</SelectItem>
-                              <SelectItem value="Senior High School Department">Senior High School Department</SelectItem>
-                              <SelectItem value="Administration">Administration</SelectItem>
-                              <SelectItem value="Others">Others</SelectItem>
-                            </>
-                          ) : (
-                            <>
-                              <SelectItem value="Elementary">Elementary</SelectItem>
-                              <SelectItem value="Junior High">Junior High</SelectItem>
-                              <SelectItem value="Senior High">Senior High</SelectItem>
-                              <SelectItem value="College">College</SelectItem>
-                              <SelectItem value="Administration">Administration</SelectItem>
-                              <SelectItem value="Others">Others</SelectItem>
-                            </>
-                          )}
+                          {/* Same department options for all faculty roles */}
+                          <SelectItem value="College of Computer Studies">College of Computer Studies</SelectItem>
+                          <SelectItem value="College of Hospitality Management">College of Hospitality Management</SelectItem>
+                          <SelectItem value="College of Education">College of Education</SelectItem>
+                          <SelectItem value="College of Agriculture">College of Agriculture</SelectItem>
+                          <SelectItem value="Elementary Department">Elementary Department</SelectItem>
+                          <SelectItem value="Junior High School Department">Junior High School Department</SelectItem>
+                          <SelectItem value="Senior High School Department">Senior High School Department</SelectItem>
+                          <SelectItem value="Administration">Administration</SelectItem>
+                          <SelectItem value="Others">Others</SelectItem>
                         </>
                       ) : selectedRole === "staff" ? (
                         <>
@@ -1726,16 +1719,15 @@ export function UnifiedProfileSetupForm({
                 </div>
 
 
-                {(selectedRole === "faculty" || selectedRole === "staff" || selectedRole === "utility" || selectedRole === "ar-sisters" || selectedRole === "advisory") && (
+                {(selectedRole === "faculty" || selectedRole === "staff" || selectedRole === "utility" || selectedRole === "ar-sisters") && (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor="messageToStudents">
-                        {selectedRole === "faculty" ? "Message to Students *" : 
-                         selectedRole === "advisory" ? "Class Motto" : "Message to Students"}
+                        {selectedRole === "faculty" ? "Message to Students *" : "Message to Students"}
                       </Label>
                       <Textarea
                         id="messageToStudents"
-                        placeholder={selectedRole === "advisory" ? "Share your class motto, inspiration, or guiding principle" : "Always stay curious."}
+                        placeholder="Always stay curious."
                         value={formData.messageToStudents}
                         onChange={(e) => handleInputChange("messageToStudents", e.target.value)}
                         className={errors.messageToStudents ? "border-red-500" : ""}
@@ -1743,58 +1735,58 @@ export function UnifiedProfileSetupForm({
                       />
                       {errors.messageToStudents && <p className="text-sm text-red-600">{errors.messageToStudents}</p>}
                     </div>
+                  </>
+                )}
 
-                    {selectedRole === "faculty" || selectedRole === "advisory" && (
-                      <>
-                        <div className="space-y-2">
-                          <Label htmlFor="courses">Courses Taught</Label>
-                          <Textarea
-                            id="courses"
-                            placeholder="Data Structures, Algorithms, Web Development..."
-                            value={formData.courses}
-                            onChange={(e) => handleInputChange("courses", e.target.value)}
-                            rows={2}
-                          />
-                        </div>
+                {(selectedRole === "faculty" || selectedRole === "advisory") && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="courses">Courses Taught</Label>
+                      <Textarea
+                        id="courses"
+                        placeholder="Data Structures, Algorithms, Web Development..."
+                        value={formData.courses}
+                        onChange={(e) => handleInputChange("courses", e.target.value)}
+                        rows={2}
+                      />
+                    </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="additionalRoles">Additional Roles & Responsibilities</Label>
-                          <Textarea
-                            id="additionalRoles"
-                            placeholder="Student Council Advisor, Research Committee Member..."
-                            value={formData.additionalRoles}
-                            onChange={(e) => handleInputChange("additionalRoles", e.target.value)}
-                            rows={2}
-                          />
-                        </div>
-                      </>
-                    )}
+                    <div className="space-y-2">
+                      <Label htmlFor="additionalRoles">Additional Roles & Responsibilities</Label>
+                      <Textarea
+                        id="additionalRoles"
+                        placeholder="Student Council Advisor, Research Committee Member..."
+                        value={formData.additionalRoles}
+                        onChange={(e) => handleInputChange("additionalRoles", e.target.value)}
+                        rows={2}
+                      />
+                    </div>
+                  </>
+                )}
 
-                    {selectedRole === "ar-sisters" && (
-                      <>
-                        <div className="space-y-2">
-                          <Label htmlFor="education">Educational Background</Label>
-                          <Textarea
-                            id="education"
-                            placeholder="Bachelor of Education, Master of Arts in Education"
-                            value={formData.education}
-                            onChange={(e) => handleInputChange("education", e.target.value)}
-                            rows={3}
-                          />
-                        </div>
+                {selectedRole === "ar-sisters" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="education">Educational Background</Label>
+                      <Textarea
+                        id="education"
+                        placeholder="Bachelor of Education, Master of Arts in Education"
+                        value={formData.education}
+                        onChange={(e) => handleInputChange("education", e.target.value)}
+                        rows={3}
+                      />
+                    </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="additionalRoles">Additional Roles & Responsibilities</Label>
-                          <Textarea
-                            id="additionalRoles"
-                            placeholder="Any additional roles or responsibilities"
-                            value={formData.additionalRoles}
-                            onChange={(e) => handleInputChange("additionalRoles", e.target.value)}
-                            rows={3}
-                          />
-                        </div>
-                      </>
-                    )}
+                    <div className="space-y-2">
+                      <Label htmlFor="additionalRoles">Additional Roles & Responsibilities</Label>
+                      <Textarea
+                        id="additionalRoles"
+                        placeholder="Any additional roles or responsibilities"
+                        value={formData.additionalRoles}
+                        onChange={(e) => handleInputChange("additionalRoles", e.target.value)}
+                        rows={3}
+                      />
+                    </div>
                   </>
                 )}
               </CardContent>
@@ -1807,9 +1799,10 @@ export function UnifiedProfileSetupForm({
               schoolYearId={schoolYearId}
               formData={{
                 academicDepartment: formData.academicDepartment || "",
-                academicYearLevels: formData.academicYearLevels || "[]",
+                academicYearLevel: formData.academicYearLevel || "",
                 academicCourseProgram: formData.academicCourseProgram || "",
-                academicSections: formData.academicSections || "[]",
+                academicSection: formData.academicSection || "",
+                academicMajor: formData.academicMajor || "",
                 messageToStudents: formData.messageToStudents || ""
               }}
               onInputChange={updateField}
@@ -2100,6 +2093,8 @@ export function UnifiedProfileSetupForm({
           {isEditing ? "Update Profile" : "Save Profile"}
         </Button>
       </div>
+        </>
+          )}
         </>
       )}
     </div>

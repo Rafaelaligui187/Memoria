@@ -406,7 +406,6 @@ export default function CollegeYearbookPage({
       if (result.success && result.data) {
         // Find advisory profile for this class
         const advisoryProfile = result.data.find((profile: any) => 
-          profile.isAdvisoryEntry && 
           profile.userType === 'advisory' &&
           profile.messageToStudents
         )

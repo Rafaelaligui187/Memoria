@@ -18,7 +18,18 @@ function getCollectionName(userType: string, department?: string): string {
     case 'utility':
       return YEARBOOK_COLLECTIONS.FACULTY_STAFF
     case 'advisory':
-      return 'advisory_profiles' // Dedicated collection for advisory profiles
+      // For advisory profiles, use department-specific collections directly
+      if (department) {
+        // Map department names to collection names
+        const departmentMappings: Record<string, string> = {
+          'College': YEARBOOK_COLLECTIONS.COLLEGE,
+          'Senior High': YEARBOOK_COLLECTIONS.SENIOR_HIGH,
+          'Junior High': YEARBOOK_COLLECTIONS.JUNIOR_HIGH,
+          'Elementary': YEARBOOK_COLLECTIONS.ELEMENTARY,
+        }
+        return departmentMappings[department] || YEARBOOK_COLLECTIONS.COLLEGE // Default to College if unknown
+      }
+      return YEARBOOK_COLLECTIONS.COLLEGE // Default to College if no department specified
     case 'student':
       // For students, we need the department to determine collection
       if (department) {
@@ -103,9 +114,9 @@ interface ManualProfileData {
 
   // Advisory-specific fields
   academicDepartment?: string
-  academicYearLevels?: string[]
+  academicYearLevel?: string
   academicCourseProgram?: string
-  academicSections?: string[]
+  academicSection?: string
 
   // Alumni-specific additional fields
   achievements?: string
@@ -146,7 +157,9 @@ export async function POST(request: NextRequest, { params }: { params: { yearId:
     console.log("[Manual Profile] School year label:", schoolYearLabel)
 
     // Determine the correct collection based on user type and department
-    const collectionName = getCollectionName(userType, profileData.department)
+    // For advisory profiles, use academicDepartment instead of department
+    const departmentForCollection = userType === "advisory" ? profileData.academicDepartment : profileData.department
+    const collectionName = getCollectionName(userType, departmentForCollection)
     console.log("[Manual Profile] Using collection:", collectionName)
 
     const yearbookCollection = db.collection(collectionName)
@@ -252,9 +265,9 @@ export async function POST(request: NextRequest, { params }: { params: { yearId:
         "yearsOfService",
         "messageToStudents",
         "academicDepartment",
-        "academicYearLevels",
+        "academicYearLevel",
         "academicCourseProgram",
-        "academicSections",
+        "academicSection",
       ],
     }
 
@@ -303,8 +316,8 @@ export async function POST(request: NextRequest, { params }: { params: { yearId:
       schoolYearId: params.yearId,
       schoolYear: schoolYearLabel, // Add the human-readable school year label
       userType: userType,
-      profileStatus: "approved", // Manual profiles are automatically approved
-      status: "approved", // Also set status for yearbook compatibility
+      profileStatus: "approved", // Manual profiles are auto-approved
+      status: "approved", // Manual profiles are auto-approved
       createdAt: new Date(),
       updatedAt: new Date(),
       submittedAt: new Date(),
@@ -313,6 +326,14 @@ export async function POST(request: NextRequest, { params }: { params: { yearId:
       
       // Profile data
       ...profileData,
+      
+      // For advisory profiles, map academic fields to yearbook fields
+      ...(userType === "advisory" && {
+        department: profileData.academicDepartment,
+        yearLevel: profileData.academicYearLevel,
+        courseProgram: profileData.academicCourseProgram || profileData.academicDepartment,
+        blockSection: profileData.academicSection || "All Sections",
+      }),
       
       // Process position field for AR Sisters
       ...(userType === "ar-sisters" && {
@@ -325,11 +346,12 @@ export async function POST(request: NextRequest, { params }: { params: { yearId:
       // Legacy compatibility fields
       name: profileData.fullName,
       role: userType,
-      department: profileData.department || profileData.departmentAssigned || "",
+      department: userType === "advisory" ? profileData.academicDepartment : (profileData.department || profileData.departmentAssigned || ""),
       
       // Additional metadata for manual profiles
       isManualProfile: true,
       createdByAdmin: true,
+      profileCreationMethod: "create-manual-profile",
     }
 
     console.log("[Manual Profile] Inserting profile document:", {
@@ -382,6 +404,8 @@ export async function POST(request: NextRequest, { params }: { params: { yearId:
                   // Mark as faculty entry
                   isFacultyEntry: true,
                   originalFacultyId: result.insertedId,
+                  // Include profile creation method for differentiation
+                  profileCreationMethod: "create-manual-profile",
                   // Ensure it's approved (manual profiles are auto-approved)
                   status: "approved",
                   createdAt: new Date(),
@@ -404,6 +428,8 @@ export async function POST(request: NextRequest, { params }: { params: { yearId:
               // Mark as faculty entry
               isFacultyEntry: true,
               originalFacultyId: result.insertedId,
+              // Include profile creation method for differentiation
+              profileCreationMethod: "create-manual-profile",
               // Ensure it's approved (manual profiles are auto-approved)
               status: "approved",
               createdAt: new Date(),
@@ -419,6 +445,9 @@ export async function POST(request: NextRequest, { params }: { params: { yearId:
         // Don't fail the main profile creation if academic entries fail
       }
     }
+
+    // Advisory profiles are now stored directly in department-specific collections
+    // No additional processing needed since they're already in the correct collection
 
     // Create audit log for manual profile creation
     try {

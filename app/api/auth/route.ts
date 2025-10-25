@@ -505,6 +505,125 @@ export async function POST(request: Request) {
       })
     }
 
+    // Delete user account completely
+    if (action === "delete-account") {
+      const { userId, password } = body
+
+      if (!userId) {
+        return NextResponse.json({
+          success: false,
+          message: "User ID is required"
+        }, { status: 400 })
+      }
+
+      if (!password) {
+        return NextResponse.json({
+          success: false,
+          message: "Password confirmation is required"
+        }, { status: 400 })
+      }
+
+      const db = await connectToDatabase()
+      const usersCollection = db.collection("users")
+
+      // Find user by ID
+      const user = await usersCollection.findOne({
+        _id: new ObjectId(userId),
+        isActive: true
+      })
+
+      if (!user) {
+        return NextResponse.json({
+          success: false,
+          message: "User not found"
+        }, { status: 404 })
+      }
+
+      // Verify password before deletion
+      const isPasswordValid = await verifyPassword(password, user.password)
+      if (!isPasswordValid) {
+        return NextResponse.json({
+          success: false,
+          message: "Invalid password. Please enter your current password to confirm account deletion."
+        }, { status: 401 })
+      }
+
+      try {
+        // Delete all profiles created by this user across all collections
+        const YEARBOOK_COLLECTIONS = {
+          COLLEGE: "College_yearbook",
+          SENIOR_HIGH: "SeniorHigh_yearbook", 
+          JUNIOR_HIGH: "JuniorHigh_yearbook",
+          ELEMENTARY: "Elementary_yearbook",
+          ALUMNI: "Alumni_yearbook",
+          FACULTY_STAFF: "FacultyStaff_yearbook"
+        }
+
+        let totalProfilesDeleted = 0
+        for (const collectionName of Object.values(YEARBOOK_COLLECTIONS)) {
+          const collection = db.collection(collectionName)
+          const deleteResult = await collection.deleteMany({ ownedBy: new ObjectId(userId) })
+          totalProfilesDeleted += deleteResult.deletedCount
+        }
+
+        // Delete audit logs for this user
+        let auditLogsDeleted = 0
+        try {
+          const auditLogsResult = await db.collection('audit_logs').deleteMany({ userId: userId })
+          auditLogsDeleted = auditLogsResult.deletedCount
+        } catch (auditError) {
+          console.error("Error deleting audit logs:", auditError)
+          // Don't fail account deletion if audit log cleanup fails
+        }
+
+        // Delete notifications for this user
+        let notificationsDeleted = 0
+        try {
+          const notificationsResult = await db.collection('notifications').deleteMany({ userId: userId })
+          notificationsDeleted = notificationsResult.deletedCount
+        } catch (notificationError) {
+          console.error("Error deleting notifications:", notificationError)
+          // Don't fail account deletion if notification cleanup fails
+        }
+
+        // Finally, delete the user account
+        const userDeleteResult = await usersCollection.deleteOne({
+          _id: new ObjectId(userId)
+        })
+
+        if (userDeleteResult.deletedCount === 0) {
+          return NextResponse.json({
+            success: false,
+            message: "Failed to delete user account"
+          }, { status: 500 })
+        }
+
+        console.log(`[v0] Account deletion completed for user ${userId}:`, {
+          profilesDeleted: totalProfilesDeleted,
+          auditLogsDeleted: auditLogsDeleted,
+          notificationsDeleted: notificationsDeleted,
+          userDeleted: userDeleteResult.deletedCount
+        })
+
+        return NextResponse.json({
+          success: true,
+          message: "Account and all associated data deleted successfully",
+          data: {
+            profilesDeleted: totalProfilesDeleted,
+            auditLogsDeleted: auditLogsDeleted,
+            notificationsDeleted: notificationsDeleted
+          }
+        })
+
+      } catch (error) {
+        console.error("Account deletion error:", error)
+        return NextResponse.json({
+          success: false,
+          message: "Failed to delete account. Please try again."
+        }, { status: 500 })
+      }
+    }
+
     return NextResponse.json({ success: false, message: "Invalid action" }, { status: 400 })
   } catch (error) {
     console.error("Authentication error:", error)

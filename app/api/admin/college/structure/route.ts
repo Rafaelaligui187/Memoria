@@ -227,45 +227,109 @@ export async function GET(request: NextRequest) {
 
     // If specific course requested, return only that course
     if (courseId) {
-      const specificCourse = processedCourses.find(course => course.id === courseId)
+      // Try to find course by ID first, then by name (uppercase)
+      const specificCourse = processedCourses.find(course => 
+        course.id === courseId || course.name.toUpperCase() === courseId.toUpperCase()
+      )
       
       // If course not found in database, create a fallback course with real blocks from database
       if (!specificCourse) {
         // Get blocks for this course from sections collection (even if course doesn't exist)
+        // Try to find by courseId first, then by course name
         const courseBlocks = collegeBlocks.filter(block => 
-          block.courseId === courseId
+          block.courseId === courseId || 
+          block.courseName?.toUpperCase() === courseId.toUpperCase() ||
+          block.courseName?.toUpperCase() === courseId.toUpperCase().replace('-', ' ')
         )
         
-        const fallbackCourse = {
-          id: courseId,
-          name: courseId.toUpperCase().replace('-', ' '),
-          majorType: 'no-major',
-          majors: [],
-          yearLevels: COLLEGE_YEAR_LEVEL_NAMES.map(yearLevel => {
-            // Get blocks for this year level from database
-            const yearBlocks = courseBlocks.filter(block => 
-              block.grade === yearLevel
-            )
+        // Check if this course has majors based on sections
+        const hasMajors = courseBlocks.some(block => block.majorName && block.majorName !== 'No major')
+        
+        if (hasMajors) {
+          // Course has majors - organize by major
+          const majorMap = new Map()
+          
+          // Get unique majors from blocks
+          const uniqueMajors = [...new Set(courseBlocks
+            .filter(block => block.majorName && block.majorName !== 'No major')
+            .map(block => block.majorName)
+          )]
+          
+          uniqueMajors.forEach(majorName => {
+            majorMap.set(majorName, new Map())
             
-            return {
-              id: yearLevel.toLowerCase().replace(/\s+/g, '-'),
-              level: yearLevel,
-              blocks: yearBlocks.map(block => ({
+            COLLEGE_YEAR_LEVEL_NAMES.forEach(yearLevel => {
+              const yearBlocks = courseBlocks.filter(block => 
+                block.majorName === majorName && 
+                block.grade === yearLevel
+              )
+              
+              majorMap.get(majorName).set(yearLevel, yearBlocks.map(block => ({
                 id: block._id.toString(),
                 name: block.name,
                 studentCount: 0,
                 officerCount: 0,
                 students: [],
                 officers: []
-              }))
-            }
+              })))
+            })
           })
+          
+          const majors = Array.from(majorMap.entries()).map(([majorName, yearMap]) => ({
+            id: majorName.toLowerCase().replace(/\s+/g, '-'),
+            name: majorName,
+            yearLevels: COLLEGE_YEAR_LEVEL_NAMES.map(yearLevel => ({
+              id: yearLevel.toLowerCase().replace(/\s+/g, '-'),
+              level: yearLevel,
+              blocks: yearMap.get(yearLevel) || []
+            }))
+          }))
+          
+          const fallbackCourse = {
+            id: courseId,
+            name: courseId.toUpperCase().replace('-', ' '),
+            majorType: 'has-major',
+            majors: majors,
+            yearLevels: []
+          }
+          
+          return NextResponse.json({
+            success: true,
+            data: fallbackCourse
+          }, { headers })
+        } else {
+          // Course has no majors - direct year levels
+          const fallbackCourse = {
+            id: courseId,
+            name: courseId.toUpperCase().replace('-', ' '),
+            majorType: 'no-major',
+            majors: [],
+            yearLevels: COLLEGE_YEAR_LEVEL_NAMES.map(yearLevel => {
+              // Get blocks for this year level from database
+              const yearBlocks = courseBlocks.filter(block => 
+                block.grade === yearLevel
+              )
+              
+              return {
+                id: yearLevel.toLowerCase().replace(/\s+/g, '-'),
+                level: yearLevel,
+                blocks: yearBlocks.map(block => ({
+                  id: block._id.toString(),
+                  name: block.name,
+                  studentCount: 0,
+                  officerCount: 0,
+                  students: [],
+                  officers: []
+                }))
+              }
+            })
+          }
+          
+          return NextResponse.json({
+            success: true,
+            data: fallbackCourse
+          }, { headers })
         }
-        
-        return NextResponse.json({
-          success: true,
-          data: fallbackCourse
-        }, { headers })
       }
       
       return NextResponse.json({

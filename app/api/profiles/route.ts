@@ -16,7 +16,18 @@ function getCollectionName(userType: string, department?: string): string {
     case 'utility':
       return YEARBOOK_COLLECTIONS.FACULTY_STAFF
     case 'advisory':
-      return 'advisory_profiles' // Dedicated collection for advisory profiles
+      // For advisory profiles, use department-specific collections directly
+      if (department) {
+        // Map department names to collection names
+        const departmentMappings: Record<string, string> = {
+          'College': YEARBOOK_COLLECTIONS.COLLEGE,
+          'Senior High': YEARBOOK_COLLECTIONS.SENIOR_HIGH,
+          'Junior High': YEARBOOK_COLLECTIONS.JUNIOR_HIGH,
+          'Elementary': YEARBOOK_COLLECTIONS.ELEMENTARY,
+        }
+        return departmentMappings[department] || YEARBOOK_COLLECTIONS.COLLEGE // Default to College if unknown
+      }
+      return YEARBOOK_COLLECTIONS.COLLEGE // Default to College if no department specified
     case 'student':
       // For students, we need the department to determine collection
       if (department) {
@@ -52,7 +63,7 @@ export async function GET(request: Request) {
     const db = await connectToDatabase()
     
     // Search across all collections to find profiles owned by this user
-    const collectionsToSearch = [...Object.values(YEARBOOK_COLLECTIONS), 'advisory_profiles']
+    const collectionsToSearch = [...Object.values(YEARBOOK_COLLECTIONS)]
     let allProfiles: any[] = []
     
     for (const collectionName of collectionsToSearch) {
@@ -160,6 +171,14 @@ export async function POST(request: Request) {
                 ...profileData,
                 status: "approved", // Admin edits are auto-approved
                 updatedAt: new Date(),
+                
+                // For advisory profiles, map academic fields to yearbook fields
+                ...(userType === "advisory" && {
+                  department: profileData.academicDepartment,
+                  yearLevel: profileData.academicYearLevel,
+                  courseProgram: profileData.academicCourseProgram || profileData.academicDepartment,
+                  blockSection: profileData.academicSection || "All Sections",
+                }),
               }
             }
           )
@@ -190,6 +209,14 @@ export async function POST(request: Request) {
             previousProfileId: existingProfile._id, // Reference to the approved version
             createdAt: new Date(),
             updatedAt: new Date(),
+            
+            // For advisory profiles, map academic fields to yearbook fields
+            ...(userType === "advisory" && {
+              department: profileData.academicDepartment,
+              yearLevel: profileData.academicYearLevel,
+              courseProgram: profileData.academicCourseProgram || profileData.academicDepartment,
+              blockSection: profileData.academicSection || "All Sections",
+            }),
           }
 
           const result = await yearbookCollection.insertOne(newProfileDocument)
@@ -214,6 +241,14 @@ export async function POST(request: Request) {
               ...profileData,
               status: isAdminEdit ? "approved" : "pending", // Admin edits are auto-approved
               updatedAt: new Date(),
+              
+              // For advisory profiles, map academic fields to yearbook fields
+              ...(userType === "advisory" && {
+                department: profileData.academicDepartment,
+                yearLevel: profileData.academicYearLevel,
+                courseProgram: profileData.academicCourseProgram || profileData.academicDepartment,
+                blockSection: profileData.academicSection || "All Sections",
+              }),
             }
           }
         )
@@ -245,6 +280,15 @@ export async function POST(request: Request) {
               ...profileData,
               status: isAdminEdit ? "approved" : "pending", // Admin edits are auto-approved
               updatedAt: new Date(),
+              
+              // For advisory profiles, map academic fields to yearbook fields
+              ...(userType === "advisory" && {
+                department: profileData.academicDepartment,
+                yearLevel: profileData.academicYearLevel,
+                courseProgram: profileData.academicCourseProgram || profileData.academicDepartment,
+                blockSection: profileData.academicSection || "All Sections",
+              }),
+              
               // Clear rejection-related fields
               $unset: {
                 rejectionReason: "",
@@ -314,6 +358,14 @@ export async function POST(request: Request) {
       status: isAdminEdit ? "approved" : "pending", // Admin edits are auto-approved
       createdAt: new Date(),
       updatedAt: new Date(),
+      
+      // For advisory profiles, map academic fields to yearbook fields
+      ...(userType === "advisory" && {
+        department: profileData.academicDepartment,
+        yearLevel: profileData.academicYearLevel,
+        courseProgram: profileData.academicCourseProgram || profileData.academicDepartment,
+        blockSection: profileData.academicSection || "All Sections",
+      }),
     }
 
     console.log("[v0] Inserting new profile into yearbook collection...")
@@ -386,90 +438,8 @@ export async function POST(request: Request) {
       }
     }
 
-    // For advisory profiles with academic assignments, create additional entries in department-specific collections
-    if (userType === "advisory" && profileData.academicDepartment && profileData.academicYearLevels) {
-      console.log("[v0] Advisory has academic assignments, creating additional entries...")
-      
-      try {
-        // Parse the JSON strings to arrays
-        const yearLevels = (() => {
-          try {
-            return JSON.parse(profileData.academicYearLevels || "[]")
-          } catch {
-            return []
-          }
-        })()
-        
-        const sections = (() => {
-          try {
-            return JSON.parse(profileData.academicSections || "[]")
-          } catch {
-            return []
-          }
-        })()
-        
-        if (yearLevels.length > 0) {
-          // Get the department-specific collection
-          const departmentCollectionName = getCollectionName("student", profileData.academicDepartment)
-          const departmentCollection = db.collection(departmentCollectionName)
-          
-          // Create entries for each academic assignment
-          for (const yearLevel of yearLevels) {
-            // If advisory has specific sections assigned, create entries for each section
-            if (sections.length > 0) {
-              for (const sectionKey of sections) {
-                const [sectionName, sectionYearLevel] = sectionKey.split('-')
-                
-                // Only create entry if this section matches the current year level
-                if (sectionYearLevel === yearLevel) {
-                  const advisoryYearbookEntry = {
-                    ...profileDocument,
-                    // Override fields for yearbook display
-                    department: profileData.academicDepartment,
-                    yearLevel: yearLevel,
-                    courseProgram: profileData.academicCourseProgram || profileData.academicDepartment,
-                    blockSection: sectionName,
-                    // Mark as advisory entry
-                    isAdvisoryEntry: true,
-                    originalAdvisoryId: result.insertedId,
-                    // Ensure it's approved if the main profile is approved
-                    status: profileDocument.status,
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                  }
-                  
-                  await departmentCollection.insertOne(advisoryYearbookEntry)
-                  console.log(`[v0] Created advisory yearbook entry for ${profileData.academicDepartment} - ${yearLevel} - ${sectionName}`)
-                }
-              }
-            } else {
-              // If no specific sections, create a general entry for the year level
-              const advisoryYearbookEntry = {
-                ...profileDocument,
-                // Override fields for yearbook display
-                department: profileData.academicDepartment,
-                yearLevel: yearLevel,
-                courseProgram: profileData.academicCourseProgram || profileData.academicDepartment,
-                blockSection: "All Sections", // Default for advisory without specific section assignment
-                // Mark as advisory entry
-                isAdvisoryEntry: true,
-                originalAdvisoryId: result.insertedId,
-                // Ensure it's approved if the main profile is approved
-                status: profileDocument.status,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-              }
-              
-              await departmentCollection.insertOne(advisoryYearbookEntry)
-              console.log(`[v0] Created advisory yearbook entry for ${profileData.academicDepartment} - ${yearLevel}`)
-            }
-          }
-        }
-      } catch (academicError) {
-        console.error("[v0] Error creating advisory academic entries:", academicError)
-        // Don't fail the main profile creation if academic entries fail
-      }
-    }
+    // Advisory profiles are now stored directly in department-specific collections
+    // No additional processing needed since they're already in the correct collection
 
     // Create notification for new profile submission
     try {
@@ -536,7 +506,7 @@ export async function DELETE(request: Request) {
     const db = await connectToDatabase()
     
     // Search across all collections to find the profile
-    const collectionsToSearch = [...Object.values(YEARBOOK_COLLECTIONS), 'advisory_profiles']
+    const collectionsToSearch = [...Object.values(YEARBOOK_COLLECTIONS)]
     let deletedProfile = null
     let foundCollection = null
     

@@ -7,6 +7,15 @@ interface AdminStatsData {
   totalPendingCount: number
   totalMediaItems: number
   totalOpenReports: number
+  userTypeCounts: {
+    students: number
+    faculty: number
+    staff: number
+    alumni: number
+    arSisters: number
+    utility: number
+    advisory: number
+  }
   pendingApprovals: Array<{
     _id: string
     fullName: string

@@ -14,8 +14,8 @@ export async function GET(request: NextRequest) {
 
     const db = await connectToDatabase()
     
-    // Search across all collections including advisory profiles
-    const collectionsToSearch = [...Object.values(YEARBOOK_COLLECTIONS), 'advisory_profiles']
+    // Search across all collections
+    const collectionsToSearch = [...Object.values(YEARBOOK_COLLECTIONS)]
     let allProfiles: any[] = []
     
     for (const collectionName of collectionsToSearch) {
@@ -40,8 +40,24 @@ export async function GET(request: NextRequest) {
       allProfiles = allProfiles.concat(profilesWithCollection)
     }
 
+    // Filter profiles to show only the appropriate ones for approval
+    const filteredProfiles = allProfiles.filter(profile => {
+      // For advisory profiles: show all advisory profiles (they're now stored directly in yearbook collections)
+      if (profile.userType === "advisory") {
+        return true // Show all advisory profiles since they're now stored directly in yearbook collections
+      }
+      
+      // For faculty profiles: exclude yearbook entries (show only main faculty profiles)
+      if (profile.isFacultyEntry && profile.originalFacultyId) {
+        return false
+      }
+      
+      // For all other profiles: show them normally
+      return true
+    })
+
     // Convert profiles to Account format for admin display
-    const accounts = allProfiles.map(profile => ({
+    const accounts = filteredProfiles.map(profile => ({
       id: profile._id.toString(),
       name: profile.fullName || `${profile.firstName} ${profile.lastName}`,
       email: profile.email,

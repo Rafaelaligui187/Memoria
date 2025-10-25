@@ -193,37 +193,22 @@ export const commonValidationRules: ValidationRules = {
     required: true,
     message: "Academic department is required"
   },
-  academicYearLevels: {
-    required: true,
-    custom: (value: string) => {
-      try {
-        const levels = JSON.parse(value)
-        if (!Array.isArray(levels) || levels.length === 0) {
-          return "Please select at least one academic year level"
-        }
-        return null
-      } catch {
-        return "Please select at least one academic year level"
-      }
-    }
-  },
   academicCourseProgram: {
     required: true,
     message: "Academic course/program is required"
   },
-  academicSections: {
+  // Single value fields for AdvisoryForm compatibility
+  academicYearLevel: {
     required: true,
-    custom: (value: string) => {
-      try {
-        const sections = JSON.parse(value)
-        if (!Array.isArray(sections) || sections.length === 0) {
-          return "Please select at least one academic section"
-        }
-        return null
-      } catch {
-        return "Please select at least one academic section"
-      }
-    }
+    message: "Academic year level is required"
+  },
+  academicSection: {
+    required: true,
+    message: "Academic section is required"
+  },
+  academicMajor: {
+    required: false, // Only required when BSED is selected
+    message: "Academic major is required for BSED courses"
   }
 }
 
@@ -278,6 +263,11 @@ export const validateForm = (formData: Record<string, string>, rules: Validation
     }
   })
 
+  // Custom validation for academicMajor - required only when BSED is selected
+  if (formData.academicCourseProgram === "BSED" && (!formData.academicMajor || formData.academicMajor.trim() === "")) {
+    errors.academicMajor = "Academic major is required for BSED courses"
+  }
+
   console.log('[v0] Validation errors:', errors)
   return errors
 }
@@ -319,7 +309,7 @@ export const getRoleSpecificValidationRules = (selectedRole: string): Validation
     ],
     advisory: [
       'position', 'departmentAssigned', 'yearsOfService', 'messageToStudents',
-      'academicDepartment', 'academicYearLevels', 'academicCourseProgram', 'academicSections'
+      'academicDepartment', 'academicYearLevel', 'academicCourseProgram', 'academicSection', 'academicMajor'
     ],
     alumni: [
       'department', 'courseProgram', 'graduationYear', 'currentProfession'

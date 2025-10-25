@@ -39,8 +39,8 @@ export async function POST(request: NextRequest, { params }: { params: { yearId:
 
     const db = await connectToDatabase()
     
-    // Find the profile across all possible collections including advisory profiles
-    const collectionsToSearch = [...Object.values(YEARBOOK_COLLECTIONS), 'advisory_profiles']
+    // Find the profile across all yearbook collections (advisory profiles are now stored directly in department collections)
+    const collectionsToSearch = [...Object.values(YEARBOOK_COLLECTIONS)]
     let foundProfile = null
     let foundCollection = null
     
@@ -121,137 +121,8 @@ export async function POST(request: NextRequest, { params }: { params: { yearId:
       // Don't fail the approval if cleanup fails
     }
 
-    // Create yearbook entries for Advisory profiles
-    if (foundCollection === 'advisory_profiles' && foundProfile.userType === 'advisory') {
-      console.log('Creating yearbook entries for approved Advisory profile:', profileId)
-      
-      try {
-        // Parse academic assignments
-        const academicYearLevels = typeof foundProfile.academicYearLevels === 'string' 
-          ? JSON.parse(foundProfile.academicYearLevels) 
-          : foundProfile.academicYearLevels || []
-        
-        const academicSections = typeof foundProfile.academicSections === 'string' 
-          ? JSON.parse(foundProfile.academicSections) 
-          : foundProfile.academicSections || []
-        
-        if (academicYearLevels.length > 0) {
-          // Get the department-specific collection
-          const departmentCollectionName = getCollectionName("student", foundProfile.academicDepartment)
-          const departmentCollection = db.collection(departmentCollectionName)
-          
-          // Create entries for each academic assignment
-          for (const yearLevel of academicYearLevels) {
-            // If advisory has specific sections assigned, create entries for each section
-            if (academicSections.length > 0) {
-              for (const sectionKey of academicSections) {
-                const [sectionName, sectionYearLevel] = sectionKey.split('-')
-                
-                // Only create entry if this section matches the current year level
-                if (sectionYearLevel === yearLevel) {
-                  const advisoryYearbookEntry = {
-                    // Basic profile information
-                    schoolYearId: foundProfile.schoolYearId,
-                    schoolYear: foundProfile.schoolYear,
-                    status: "approved", // Approved advisory profiles appear in yearbook
-                    fullName: foundProfile.fullName || `${foundProfile.firstName} ${foundProfile.lastName}`,
-                    nickname: foundProfile.nickname,
-                    age: foundProfile.age,
-                    gender: foundProfile.gender,
-                    birthday: foundProfile.birthday,
-                    address: foundProfile.address,
-                    email: foundProfile.email,
-                    phone: foundProfile.phone,
-                    profilePicture: foundProfile.profilePicture,
-                    sayingMotto: foundProfile.sayingMotto,
-                    bio: foundProfile.bio,
-                    achievements: foundProfile.achievements || [],
-                    
-                    // Academic assignment information
-                    department: foundProfile.academicDepartment,
-                    yearLevel: yearLevel,
-                    courseProgram: foundProfile.academicCourseProgram || foundProfile.academicDepartment,
-                    blockSection: sectionName,
-                    
-                    // Advisory-specific information
-                    position: foundProfile.position,
-                    departmentAssigned: foundProfile.departmentAssigned,
-                    yearsOfService: foundProfile.yearsOfService,
-                    messageToStudents: foundProfile.messageToStudents,
-                    courses: foundProfile.courses,
-                    additionalRoles: foundProfile.additionalRoles,
-                    
-                    // Mark as advisory entry
-                    isAdvisoryEntry: true,
-                    originalAdvisoryId: new ObjectId(profileId),
-                    userType: "advisory",
-                    
-                    // Metadata
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                    reviewedAt: new Date(),
-                    reviewedBy: "admin"
-                  }
-                  
-                  await departmentCollection.insertOne(advisoryYearbookEntry)
-                  console.log(`[Advisory Approval] Created yearbook entry for ${foundProfile.academicDepartment} - ${yearLevel} - ${sectionName}`)
-                }
-              }
-            } else {
-              // If no specific sections, create a general entry for the year level
-              const advisoryYearbookEntry = {
-                // Basic profile information
-                schoolYearId: foundProfile.schoolYearId,
-                schoolYear: foundProfile.schoolYear,
-                status: "approved",
-                fullName: foundProfile.fullName || `${foundProfile.firstName} ${foundProfile.lastName}`,
-                nickname: foundProfile.nickname,
-                age: foundProfile.age,
-                gender: foundProfile.gender,
-                birthday: foundProfile.birthday,
-                address: foundProfile.address,
-                email: foundProfile.email,
-                phone: foundProfile.phone,
-                profilePicture: foundProfile.profilePicture,
-                sayingMotto: foundProfile.sayingMotto,
-                bio: foundProfile.bio,
-                achievements: foundProfile.achievements || [],
-                
-                // Academic assignment information
-                department: foundProfile.academicDepartment,
-                yearLevel: yearLevel,
-                courseProgram: foundProfile.academicCourseProgram || foundProfile.academicDepartment,
-                
-                // Advisory-specific information
-                position: foundProfile.position,
-                departmentAssigned: foundProfile.departmentAssigned,
-                yearsOfService: foundProfile.yearsOfService,
-                messageToStudents: foundProfile.messageToStudents,
-                courses: foundProfile.courses,
-                additionalRoles: foundProfile.additionalRoles,
-                
-                // Mark as advisory entry
-                isAdvisoryEntry: true,
-                originalAdvisoryId: new ObjectId(profileId),
-                userType: "advisory",
-                
-                // Metadata
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                reviewedAt: new Date(),
-                reviewedBy: "admin"
-              }
-              
-              await departmentCollection.insertOne(advisoryYearbookEntry)
-              console.log(`[Advisory Approval] Created general yearbook entry for ${foundProfile.academicDepartment} - ${yearLevel}`)
-            }
-          }
-        }
-      } catch (yearbookError) {
-        console.error('Error creating yearbook entries for Advisory profile:', yearbookError)
-        // Don't fail the approval if yearbook entry creation fails
-      }
-    }
+    // Advisory profiles are now stored directly in department-specific collections
+    // No additional yearbook entry creation needed since they're already in the correct collection
 
     // Send notification to user about approval (TODO: implement notification system)
     console.log('Profile approved successfully:', profileId)

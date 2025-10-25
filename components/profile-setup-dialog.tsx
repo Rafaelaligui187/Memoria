@@ -34,6 +34,8 @@ export function ProfileSetupDialog({ open, onOpenChange, schoolYearId, isEditing
   const [availableAcademicPrograms, setAvailableAcademicPrograms] = useState<string[]>([])
   const [availableAcademicSections, setAvailableAcademicSections] = useState<{name: string, yearLevel: string}[]>([])
   const [departmentData, setDepartmentData] = useState<any>(null)
+  const [isLoadingFormData, setIsLoadingFormData] = useState(true)
+  const [formDataError, setFormDataError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     fullName: "",
     nickname: "",
@@ -126,6 +128,9 @@ export function ProfileSetupDialog({ open, onOpenChange, schoolYearId, isEditing
   // Fetch dynamic form data
   useEffect(() => {
     const fetchFormData = async () => {
+      setIsLoadingFormData(true)
+      setFormDataError(null)
+      
       try {
         const response = await fetch(`/api/admin/form-data?schoolYearId=${schoolYearId}`)
         const result = await response.json()
@@ -135,55 +140,15 @@ export function ProfileSetupDialog({ open, onOpenChange, schoolYearId, isEditing
           console.log('Dynamic form data loaded for profile dialog:', result.data.departments)
         } else {
           console.error('Failed to fetch form data:', result.error)
-          // Fallback to hardcoded data
-          setDepartmentData({
-            "Elementary": {
-              yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
-              programs: ["Elementary"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-            "Junior High": {
-              yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
-              programs: ["Junior High"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-            "Senior High": {
-              yearLevels: ["Grade 11", "Grade 12"],
-              programs: ["STEM", "ABM", "HUMSS", "GAS", "TVL"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-            "College": {
-              yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-              programs: ["BSIT", "BSCS", "BSIS", "BSA", "BSBA"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-          })
+          setFormDataError(`Failed to load academic data: ${result.error}`)
+          setDepartmentData({})
         }
       } catch (error) {
         console.error('Error fetching form data:', error)
-        // Fallback to hardcoded data
-        setDepartmentData({
-          "Elementary": {
-            yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
-            programs: ["Elementary"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-          "Junior High": {
-            yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
-            programs: ["Junior High"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-          "Senior High": {
-            yearLevels: ["Grade 11", "Grade 12"],
-            programs: ["STEM", "ABM", "HUMSS", "GAS", "TVL"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-          "College": {
-            yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-            programs: ["BSIT", "BSCS", "BSIS", "BSA", "BSBA"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-        })
+        setFormDataError('Failed to connect to database. Please check your connection and try again.')
+        setDepartmentData({})
+      } finally {
+        setIsLoadingFormData(false)
       }
     }
 
@@ -1351,7 +1316,37 @@ export function ProfileSetupDialog({ open, onOpenChange, schoolYearId, isEditing
           </DialogDescription>
         </DialogHeader>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        {/* Loading State */}
+        {isLoadingFormData && (
+          <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+            <div className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
+              <div className="text-sm text-yellow-800">
+                <p className="font-medium">Loading academic data...</p>
+                <p>Please wait while we fetch the latest academic information from the database.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Error State */}
+        {formDataError && (
+          <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+            <div className="flex items-start gap-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full mt-2"></div>
+              <div className="text-sm text-red-800">
+                <p className="font-medium mb-1">Unable to load academic data</p>
+                <p>{formDataError}</p>
+                <p className="mt-2 text-xs">Please refresh the page or contact support if the issue persists.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Form Content - Only show when data is loaded successfully */}
+        {!isLoadingFormData && !formDataError && (
+          <>
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <div className="flex items-start gap-3">
             <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
             <div className="text-sm text-blue-800">
@@ -1525,6 +1520,8 @@ export function ProfileSetupDialog({ open, onOpenChange, schoolYearId, isEditing
             </Button>
           </div>
         </div>
+          </>
+        )}
       </DialogContent>
     </Dialog>
   )

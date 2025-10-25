@@ -36,7 +36,7 @@ interface Account {
   id: string
   name: string
   email: string
-  role: "Student" | "Faculty" | "Alumni" | "Staff" | "Utility"
+  role: "Student" | "Faculty" | "Alumni" | "Staff" | "Utility" | "Advisory"
   department: string
   status: "Active" | "Inactive" | "Pending"
   yearId: string
@@ -223,10 +223,20 @@ export function AccountManagement({ selectedYear, selectedYearLabel }: AccountMa
       searchQuery === "" ||
       account.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       account.email.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesRole = selectedRole === "all" || account.role === selectedRole
-    const matchesStatus = selectedStatus === "all" || account.status === selectedStatus
+    const matchesRole = selectedRole === "all" || account.role.toLowerCase() === selectedRole.toLowerCase()
+    
+    // Handle status filtering based on profileStatus
+    let matchesStatus = true
+    if (selectedStatus !== "all") {
+      if (selectedStatus === "Approved") {
+        matchesStatus = account.profileStatus === "approved"
+      } else if (selectedStatus === "Pending") {
+        matchesStatus = account.profileStatus === "pending"
+      }
+    }
+    
     // Show approved and pending accounts, hide rejected accounts
-    const isNotRejected = account.status !== "Inactive"
+    const isNotRejected = account.profileStatus !== "rejected"
     return matchesSearch && matchesRole && matchesStatus && isNotRejected
   })
 
@@ -429,16 +439,6 @@ export function AccountManagement({ selectedYear, selectedYearLabel }: AccountMa
           <h2 className="text-2xl font-bold tracking-tight">Account Management</h2>
           <p className="text-muted-foreground">Manage user accounts for {selectedYearLabel || selectedYear}</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setAddDialogOpen(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Account
-          </Button>
-          <Button variant="outline">
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
-        </div>
       </div>
 
       {/* Filters */}
@@ -467,6 +467,7 @@ export function AccountManagement({ selectedYear, selectedYearLabel }: AccountMa
                 <SelectItem value="Alumni">Alumni</SelectItem>
                 <SelectItem value="Staff">Staff</SelectItem>
                 <SelectItem value="Utility">Utility</SelectItem>
+                <SelectItem value="Advisory">Advisory</SelectItem>
               </SelectContent>
             </Select>
             <Select value={selectedStatus} onValueChange={setSelectedStatus}>
@@ -475,8 +476,7 @@ export function AccountManagement({ selectedYear, selectedYearLabel }: AccountMa
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="Active">Active</SelectItem>
-                <SelectItem value="Inactive">Inactive</SelectItem>
+                <SelectItem value="Approved">Approved</SelectItem>
                 <SelectItem value="Pending">Pending</SelectItem>
               </SelectContent>
             </Select>
@@ -670,6 +670,7 @@ export function AccountManagement({ selectedYear, selectedYearLabel }: AccountMa
                     <SelectItem value="Alumni">Alumni</SelectItem>
                     <SelectItem value="Staff">Staff</SelectItem>
                     <SelectItem value="Utility">Utility</SelectItem>
+                    <SelectItem value="Advisory">Advisory</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

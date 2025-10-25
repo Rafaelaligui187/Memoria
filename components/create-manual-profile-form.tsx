@@ -26,52 +26,6 @@ interface CreateManualProfileFormProps {
 
 type UserRole = "student" | "faculty" | "alumni" | "staff" | "utility" | "ar-sisters" | "advisory"
 
-// Dynamic academic data structure
-const departmentData = {
-  "Senior High": {
-    yearLevels: ["Grade 11", "Grade 12"],
-    programs: {
-      STEM: ["STEM 1", "STEM 2", "STEM 3", "STEM 4", "STEM 5"],
-      HUMSS: ["HUMSS 1", "HUMSS 2", "HUMSS 3", "HUMSS 4", "HUMSS 5"],
-      ABM: ["ABM 1", "ABM 2", "ABM 3", "ABM 4", "ABM 5"],
-      TVL: ["TVL 1", "TVL 2", "TVL 3", "TVL 4", "TVL 5"],
-      HE: ["HE 1", "HE 2", "HE 3", "HE 4", "HE 5"],
-      ICT: ["ICT 1", "ICT 2", "ICT 3", "ICT 4", "ICT 5"],
-    },
-  },
-  College: {
-    yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-    programs: {
-      "BS Information Technology": ["IT-A", "IT-B", "IT-C", "IT-D", "IT-E", "IT-F"],
-      "BEED": ["BEED-A", "BEED-B", "BEED-C", "BEED-D", "BEED-E", "BEED-F"],
-      "BSED": ["BSED-A", "BSED-B", "BSED-C", "BSED-D", "BSED-E", "BSED-F"],
-      "BS Hospitality Management": ["HM-A", "HM-B", "HM-C", "HM-D", "HM-E", "HM-F"],
-      "BS Entrepreneurship": ["ENT-A", "ENT-B", "ENT-C", "ENT-D", "ENT-E", "ENT-F"],
-      "BPed": ["PED-A", "PED-B", "PED-C", "PED-D", "PED-E", "PED-F"],
-    },
-  },
-  "Graduate School": {
-    yearLevels: ["Master's", "Doctorate"],
-    programs: {
-      "Master of Science in Computer Science": ["MSCS-A", "MSCS-B"],
-      "Master of Business Administration": ["MBA-A", "MBA-B"],
-      "Doctor of Philosophy": ["PhD-A", "PhD-B"],
-    },
-  },
-  Elementary: {
-    yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
-    programs: {
-      Elementary: ["Section A", "Section B", "Section C", "Section D"],
-    },
-  },
-  "Junior High": {
-    yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
-    programs: {
-      "Junior High": ["Section A", "Section B", "Section C", "Section D"],
-    },
-  },
-}
-
 export function CreateManualProfileForm({
   schoolYearId,
   onBack,
@@ -131,9 +85,10 @@ export function CreateManualProfileForm({
     
     // Faculty Academic Information (for advisory roles)
     academicDepartment: "",
-    academicYearLevels: "[]",
+    academicYearLevel: "",
     academicCourseProgram: "",
-    academicSections: "[]",
+    academicSection: "",
+    academicMajor: "",
 
     // Staff fields (includes maintenance)
     officeAssigned: "",
@@ -189,73 +144,108 @@ export function CreateManualProfileForm({
   const [availableYearLevels, setAvailableYearLevels] = useState<string[]>([])
   const [availablePrograms, setAvailablePrograms] = useState<string[]>([])
   const [availableSections, setAvailableSections] = useState<string[]>([])
+  const [isLoadingFormData, setIsLoadingFormData] = useState(true)
+  const [formDataError, setFormDataError] = useState<string | null>(null)
+  const [schoolYearLabel, setSchoolYearLabel] = useState<string>(schoolYearId) // Initialize with ID as fallback
+
+  // Cache for filtered sections to avoid repeated API calls
+  const [sectionsCache, setSectionsCache] = useState<Map<string, string[]>>(new Map())
+  const [debounceTimeout, setDebounceTimeout] = useState<NodeJS.Timeout | null>(null)
+
+  // Fallback data in case API fails
+  const fallbackDepartmentData = {
+    'Elementary': {
+      yearLevels: ['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'],
+      programs: ['Elementary'],
+      sections: ['Section A', 'Section B', 'Section C', 'Section D']
+    },
+    'Junior High': {
+      yearLevels: ['Grade 7', 'Grade 8', 'Grade 9', 'Grade 10'],
+      programs: ['Junior High'],
+      sections: ['Section A', 'Section B', 'Section C', 'Section D']
+    },
+    'Senior High': {
+      yearLevels: ['Grade 11', 'Grade 12'],
+      programs: ['STEM', 'ABM', 'HUMSS', 'GAS', 'TVL'],
+      sections: ['Section A', 'Section B', 'Section C', 'Section D']
+    },
+    'College': {
+      yearLevels: ['1st Year', '2nd Year', '3rd Year', '4th Year'],
+      programs: ['BSIT', 'BSCS', 'BSIS', 'BSA', 'BSBA'],
+      sections: ['Section A', 'Section B', 'Section C', 'Section D']
+    }
+  }
+
+  // Fetch school year label
+  useEffect(() => {
+    const fetchSchoolYearLabel = async () => {
+      try {
+        const response = await fetch(`/api/school-years/${schoolYearId}`, {
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache',
+          },
+        })
+        
+        const result = await response.json()
+        
+        if (result.success && result.data) {
+          setSchoolYearLabel(result.data.yearLabel || schoolYearId)
+        } else {
+          // Fallback to the ID if API fails
+          setSchoolYearLabel(schoolYearId)
+        }
+      } catch (err) {
+        console.error('Error fetching school year label:', err)
+        // Fallback to the ID if API fails
+        setSchoolYearLabel(schoolYearId)
+      }
+    }
+
+    fetchSchoolYearLabel()
+  }, [schoolYearId])
 
   // Fetch dynamic form data
   useEffect(() => {
     const fetchFormData = async () => {
+      setIsLoadingFormData(true)
+      setFormDataError(null)
+      
       try {
-        setLoading(true)
-        const response = await fetch(`/api/admin/form-data?schoolYearId=${schoolYearId}`)
+        // Add timeout to prevent hanging
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+        
+        const response = await fetch(`/api/admin/form-data?schoolYearId=${schoolYearId}`, {
+          signal: controller.signal
+        })
+        
+        clearTimeout(timeoutId)
         const result = await response.json()
         
         if (result.success) {
           setDepartmentData(result.data.departments)
           setProgramDetails(result.data.programDetails || {})
+          setLoading(false) // Set loading to false when data is loaded
           console.log('Dynamic form data loaded for admin:', result.data.departments)
           console.log('Program details loaded:', result.data.programDetails)
         } else {
           console.error('Failed to fetch form data:', result.error)
-          // Fallback to hardcoded data
-          setDepartmentData({
-            "Senior High": {
-              yearLevels: ["Grade 11", "Grade 12"],
-              programs: ["STEM", "ABM", "HUMSS", "GAS", "TVL"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-            College: {
-              yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-              programs: ["BSIT", "BSCS", "BSIS", "BSA", "BSBA"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-            Elementary: {
-              yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
-              programs: ["Elementary"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-            "Junior High": {
-              yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
-              programs: ["Junior High"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-          })
+          setFormDataError(`Failed to load academic data: ${result.error}`)
+          setDepartmentData({})
+          setLoading(false) // Set loading to false even on error
         }
       } catch (error) {
         console.error('Error fetching form data:', error)
-        // Fallback to hardcoded data
-        setDepartmentData({
-          "Senior High": {
-            yearLevels: ["Grade 11", "Grade 12"],
-            programs: ["STEM", "ABM", "HUMSS", "GAS", "TVL"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-          College: {
-            yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-            programs: ["BSIT", "BSCS", "BSIS", "BSA", "BSBA"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-          Elementary: {
-            yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
-            programs: ["Elementary"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-          "Junior High": {
-            yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
-            programs: ["Junior High"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-        })
+        if (error.name === 'AbortError') {
+          setFormDataError('Request timed out. Please check your connection and try again.')
+        } else {
+          setFormDataError('Failed to connect to database. Please check your connection and try again.')
+        }
+        setDepartmentData({})
+        setLoading(false) // Set loading to false on error
       } finally {
-        setLoading(false)
+        setIsLoadingFormData(false)
       }
     }
 
@@ -299,10 +289,25 @@ export function CreateManualProfileForm({
     }
   }, [formData.department, formData.courseProgram, programDetails, updateField])
 
-  // Fetch filtered sections when course/strand and year level are selected
+  // Fetch filtered sections with caching and debouncing
   useEffect(() => {
-    const fetchFilteredSections = async () => {
+    // Clear previous timeout
+    if (debounceTimeout) {
+      clearTimeout(debounceTimeout)
+    }
+
+    const timeout = setTimeout(async () => {
       if (formData.department && formData.courseProgram && formData.yearLevel) {
+        const cacheKey = `${formData.department}-${formData.courseProgram}-${formData.yearLevel}-${formData.major || ''}`
+        
+        // Check cache first
+        if (sectionsCache.has(cacheKey)) {
+          const cachedSections = sectionsCache.get(cacheKey)!
+          setAvailableSections(cachedSections)
+          console.log(`Using cached sections for ${cacheKey}:`, cachedSections)
+          return
+        }
+
         try {
           const params = new URLSearchParams({
             schoolYearId: schoolYearId,
@@ -320,11 +325,16 @@ export function CreateManualProfileForm({
           const result = await response.json()
           
           if (result.success) {
-            setAvailableSections(result.data.sections || [])
-            console.log(`Filtered sections for ${formData.department} - ${formData.courseProgram} - ${formData.yearLevel}:`, result.data.sections)
+            const sections = result.data.sections || []
+            setAvailableSections(sections)
+            
+            // Cache the result
+            setSectionsCache(prev => new Map(prev).set(cacheKey, sections))
+            
+            console.log(`Fetched and cached sections for ${cacheKey}:`, sections)
             
             // Reset block/section selection if current selection is not available
-            if (formData.blockSection && !result.data.sections.includes(formData.blockSection)) {
+            if (formData.blockSection && !sections.includes(formData.blockSection)) {
               updateField("blockSection", "")
             }
           }
@@ -338,9 +348,16 @@ export function CreateManualProfileForm({
           updateField("blockSection", "")
         }
       }
-    }
+    }, 300) // 300ms debounce
 
-    fetchFilteredSections()
+    setDebounceTimeout(timeout)
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (timeout) {
+        clearTimeout(timeout)
+      }
+    }
   }, [formData.department, formData.courseProgram, formData.yearLevel, formData.major, schoolYearId, updateField])
 
   useEffect(() => {
@@ -370,59 +387,57 @@ export function CreateManualProfileForm({
       setAvailableAcademicPrograms(deptData.programs || [])
       
       // Reset dependent fields when department changes
-      updateField("academicYearLevels", "[]")
+      updateField("academicYearLevel", "")
       updateField("academicCourseProgram", "")
-      updateField("academicSections", "[]")
+      updateField("academicSection", "")
       setAvailableAcademicSections([]) // Clear sections initially
     }
   }, [formData.academicDepartment, departmentData, updateField])
 
-  // Fetch filtered academic sections when course/program and year levels are selected
+  // Fetch filtered academic sections with caching and debouncing
   useEffect(() => {
-    const fetchFilteredAcademicSections = async () => {
-      const academicYearLevels = JSON.parse(formData.academicYearLevels || "[]")
-      if (formData.academicDepartment && formData.academicCourseProgram && academicYearLevels.length > 0) {
+    // Clear previous timeout
+    if (debounceTimeout) {
+      clearTimeout(debounceTimeout)
+    }
+
+    const timeout = setTimeout(async () => {
+      if (formData.academicDepartment && formData.academicCourseProgram && formData.academicYearLevel) {
+        const cacheKey = `academic-${formData.academicDepartment}-${formData.academicCourseProgram}-${formData.academicYearLevel}`
+        
+        // Check cache first
+        if (sectionsCache.has(cacheKey)) {
+          const cachedSections = sectionsCache.get(cacheKey)!
+          const academicSections = cachedSections.map(name => ({ name, yearLevel: formData.academicYearLevel }))
+          setAvailableAcademicSections(academicSections)
+          console.log(`Using cached academic sections for ${cacheKey}:`, academicSections)
+          return
+        }
+
         try {
-          // Make multiple API calls for each selected year level
-          const sectionPromises = academicYearLevels.map(async (yearLevel: string) => {
-            const params = new URLSearchParams({
-              schoolYearId: schoolYearId,
-              department: formData.academicDepartment,
-              program: formData.academicCourseProgram,
-              yearLevel: yearLevel
-            })
-            
-            const response = await fetch(`/api/admin/form-data?${params}`)
-            const result = await response.json()
-            
-            if (result.success) {
-              // Return sections with their year level information
-              return (result.data.sections || []).map((section: string) => ({
-                name: section,
-                yearLevel: yearLevel
-              }))
-            }
-            return []
+          const params = new URLSearchParams({
+            schoolYearId: schoolYearId,
+            department: formData.academicDepartment,
+            program: formData.academicCourseProgram,
+            yearLevel: formData.academicYearLevel
           })
           
-          // Wait for all API calls to complete
-          const sectionResults = await Promise.all(sectionPromises)
+          const response = await fetch(`/api/admin/form-data?${params}`)
+          const result = await response.json()
           
-          // Combine sections from all year levels
-          const allSections = sectionResults.flat()
-          
-          setAvailableAcademicSections(allSections)
-          console.log(`Filtered academic sections for ${formData.academicDepartment} - ${formData.academicCourseProgram} - ${academicYearLevels}:`, allSections)
-          
-          // Reset academic sections if current selections are not available
-          const academicSections = JSON.parse(formData.academicSections || "[]")
-          if (academicSections.length > 0) {
-            const availableSectionKeys = allSections.map(s => `${s.name}-${s.yearLevel}`)
-            const validSections = academicSections.filter((section: string) => 
-              availableSectionKeys.includes(section)
-            )
-            if (validSections.length !== academicSections.length) {
-              updateField("academicSections", JSON.stringify(validSections))
+          if (result.success) {
+            const sections = result.data.sections || []
+            const academicSections = sections.map(name => ({ name, yearLevel: formData.academicYearLevel }))
+            setAvailableAcademicSections(academicSections)
+            
+            // Cache the result (store as strings for consistency)
+            setSectionsCache(prev => new Map(prev).set(cacheKey, sections))
+            
+            console.log(`Fetched and cached academic sections for ${cacheKey}:`, academicSections)
+            
+            // Reset academic section if current selection is not available
+            if (formData.academicSection && !sections.includes(formData.academicSection)) {
+              updateField("academicSection", "")
             }
           }
         } catch (error) {
@@ -431,14 +446,31 @@ export function CreateManualProfileForm({
       } else {
         // If not all required fields are selected, clear sections
         setAvailableAcademicSections([])
-        if (formData.academicSections?.length > 0) {
-          updateField("academicSections", "[]")
+        if (formData.academicSection) {
+          updateField("academicSection", "")
         }
       }
-    }
+    }, 300) // 300ms debounce
 
-    fetchFilteredAcademicSections()
-  }, [formData.academicDepartment, formData.academicCourseProgram, formData.academicYearLevels, schoolYearId, updateField])
+    setDebounceTimeout(timeout)
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (timeout) {
+        clearTimeout(timeout)
+      }
+    }
+  }, [formData.academicDepartment, formData.academicCourseProgram, formData.academicYearLevel, schoolYearId, updateField])
+
+  // Cleanup effect to clear cache and timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceTimeout) {
+        clearTimeout(debounceTimeout)
+      }
+      setSectionsCache(new Map()) // Clear cache on unmount
+    }
+  }, [])
 
   const addAchievement = () => {
     if (newAchievement.trim() && achievements.length < 10) {
@@ -585,6 +617,9 @@ export function CreateManualProfileForm({
             profilePicture: formData.profilePicture,
             sayingMotto: formData.sayingMotto,
             
+            // Profile Creation Method - distinguish between Set Up Profile and Create Manual Profile
+            profileCreationMethod: "create-manual-profile",
+            
             // Role-specific data
             ...(selectedRole === "student" && {
               fatherGuardianName: formData.fatherGuardianName,
@@ -616,14 +651,14 @@ export function CreateManualProfileForm({
             // Advisory-specific fields
             ...(selectedRole === "advisory" && {
               academicDepartment: formData.academicDepartment,
-              academicYearLevels: formData.academicYearLevels,
+              academicYearLevel: formData.academicYearLevel,
               academicCourseProgram: formData.academicCourseProgram,
-              academicSections: formData.academicSections,
+              academicSection: formData.academicSection,
             }),
             
             ...(selectedRole === "staff" && {
               position: formData.position,
-              department: "Faculty & Staff", // Staff belong to Faculty & Staff collection
+              department: "Staff", // Staff have their own department
               officeAssigned: formData.officeAssigned === "Others" ? formData.customOfficeAssigned : formData.officeAssigned,
               yearsOfService: formData.yearsOfService ? Number(formData.yearsOfService) : undefined,
               messageToStudents: formData.messageToStudents,
@@ -631,7 +666,7 @@ export function CreateManualProfileForm({
             
             ...(selectedRole === "utility" && {
               position: formData.position,
-              department: "Faculty & Staff", // Utility belong to Faculty & Staff collection
+              department: "Utility", // Utility have their own department
               officeAssigned: formData.officeAssigned === "Others" ? formData.customOfficeAssigned : formData.officeAssigned,
               yearsOfService: formData.yearsOfService ? Number(formData.yearsOfService) : undefined,
               messageToStudents: formData.messageToStudents,
@@ -773,29 +808,16 @@ export function CreateManualProfileForm({
                         <SelectValue placeholder="Select department" />
                       </SelectTrigger>
                       <SelectContent>
-                        {/* Dynamic department options based on position */}
-                        {(formData.position === "Department Head" || formData.position === "Teacher") ? (
-                          <>
-                            <SelectItem value="College of Computer Studies">College of Computer Studies</SelectItem>
-                            <SelectItem value="College of Hospitality Management">College of Hospitality Management</SelectItem>
-                            <SelectItem value="College of Education">College of Education</SelectItem>
-                            <SelectItem value="College of Agriculture">College of Agriculture</SelectItem>
-                            <SelectItem value="Elementary Department">Elementary Department</SelectItem>
-                            <SelectItem value="Junior High School Department">Junior High School Department</SelectItem>
-                            <SelectItem value="Senior High School Department">Senior High School Department</SelectItem>
-                            <SelectItem value="Administration">Administration</SelectItem>
-                            <SelectItem value="Others">Others</SelectItem>
-                          </>
-                        ) : (
-                          <>
-                            <SelectItem value="Elementary">Elementary</SelectItem>
-                            <SelectItem value="Junior High">Junior High</SelectItem>
-                            <SelectItem value="Senior High">Senior High</SelectItem>
-                            <SelectItem value="College">College</SelectItem>
-                            <SelectItem value="Administration">Administration</SelectItem>
-                            <SelectItem value="Others">Others</SelectItem>
-                          </>
-                        )}
+                        {/* Same department options for all faculty roles */}
+                        <SelectItem value="College of Computer Studies">College of Computer Studies</SelectItem>
+                        <SelectItem value="College of Hospitality Management">College of Hospitality Management</SelectItem>
+                        <SelectItem value="College of Education">College of Education</SelectItem>
+                        <SelectItem value="College of Agriculture">College of Agriculture</SelectItem>
+                        <SelectItem value="Elementary Department">Elementary Department</SelectItem>
+                        <SelectItem value="Junior High School Department">Junior High School Department</SelectItem>
+                        <SelectItem value="Senior High School Department">Senior High School Department</SelectItem>
+                        <SelectItem value="Administration">Administration</SelectItem>
+                        <SelectItem value="Others">Others</SelectItem>
                       </SelectContent>
                     </Select>
                     {errors.departmentAssigned && <p className="text-sm text-red-600">{errors.departmentAssigned}</p>}
@@ -1925,9 +1947,10 @@ export function CreateManualProfileForm({
               schoolYearId={schoolYearId}
               formData={{
                 academicDepartment: formData.academicDepartment || "",
-                academicYearLevels: formData.academicYearLevels || "[]",
+                academicYearLevel: formData.academicYearLevel || "",
                 academicCourseProgram: formData.academicCourseProgram || "",
-                academicSections: formData.academicSections || "[]",
+                academicSection: formData.academicSection || "",
+                academicMajor: formData.academicMajor || "",
                 messageToStudents: formData.messageToStudents || ""
               }}
               onInputChange={updateField}
@@ -1966,15 +1989,102 @@ export function CreateManualProfileForm({
 
   return (
     <div className="space-y-6">
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading form data...</p>
+      {/* Loading State */}
+      {isLoadingFormData && (
+        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+          <div className="flex items-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
+            <div className="text-sm text-yellow-800">
+              <p className="font-medium">Loading academic data...</p>
+              <p>Fetching courses, strands, and sections from database. This may take a few seconds.</p>
+            </div>
           </div>
         </div>
-      ) : (
+      )}
+
+      {/* Error State */}
+      {formDataError && (
+        <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+          <div className="flex items-start gap-2">
+            <div className="w-2 h-2 bg-red-500 rounded-full mt-2"></div>
+            <div className="text-sm text-red-800 flex-1">
+              <p className="font-medium mb-1">Unable to load academic data</p>
+              <p className="mb-2">{formDataError}</p>
+              <button 
+                onClick={() => {
+                  setIsLoadingFormData(true)
+                  setFormDataError(null)
+                  // Retry the fetch
+                  const fetchFormData = async () => {
+                    try {
+                      const controller = new AbortController()
+                      const timeoutId = setTimeout(() => controller.abort(), 10000)
+                      
+                      const response = await fetch(`/api/admin/form-data?schoolYearId=${schoolYearId}`, {
+                        signal: controller.signal
+                      })
+                      
+                      clearTimeout(timeoutId)
+                      const result = await response.json()
+                      
+                      if (result.success) {
+                        setDepartmentData(result.data.departments)
+                        setProgramDetails(result.data.programDetails || {})
+                        setLoading(false) // Set loading to false on successful retry
+                        console.log('Dynamic form data loaded for admin (retry):', result.data.departments)
+                      } else {
+                        setFormDataError(`Failed to load academic data: ${result.error}`)
+                        setDepartmentData({})
+                        setLoading(false) // Set loading to false on retry error
+                      }
+                    } catch (error) {
+                      if (error.name === 'AbortError') {
+                        setFormDataError('Request timed out. Please check your connection and try again.')
+                      } else {
+                        setFormDataError('Failed to connect to database. Please check your connection and try again.')
+                      }
+                      setDepartmentData({})
+                      setLoading(false) // Set loading to false on retry error
+                    } finally {
+                      setIsLoadingFormData(false)
+                    }
+                  }
+                  fetchFormData()
+                }}
+                className="px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors mr-2"
+              >
+                Retry
+              </button>
+              <button 
+                onClick={() => {
+                  console.log('Using fallback data for manual profile form')
+                  setDepartmentData(fallbackDepartmentData)
+                  setProgramDetails({})
+                  setFormDataError(null)
+                  setIsLoadingFormData(false)
+                  setLoading(false) // Set loading to false when using fallback data
+                }}
+                className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+              >
+                Use Fallback Data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Form Content - Only show when data is loaded successfully */}
+      {!isLoadingFormData && !formDataError && (
         <>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading form data...</p>
+              </div>
+            </div>
+          ) : (
+            <>
           {/* Role Selection */}
           <Card className="p-6">
         <CardHeader className="px-0 pt-0 pb-4">
@@ -2242,11 +2352,10 @@ export function CreateManualProfileForm({
                 value={formData.officerRole}
                 onValueChange={(value) => handleInputChange("officerRole", value)}
               >
-                <SelectTrigger className={formData.officerRole && formData.officerRole !== "None" ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200" : ""}>
+                <SelectTrigger className={formData.officerRole ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200" : ""}>
                   <SelectValue placeholder="Select officer role" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="None">None</SelectItem>
                   <SelectItem value="Mayor">Mayor</SelectItem>
                   <SelectItem value="Vice Mayor">Vice Mayor</SelectItem>
                   <SelectItem value="Secretary">Secretary</SelectItem>
@@ -2256,7 +2365,7 @@ export function CreateManualProfileForm({
                   <SelectItem value="Auditor">Auditor</SelectItem>
                 </SelectContent>
               </Select>
-              {formData.officerRole && formData.officerRole !== "None" && (
+              {formData.officerRole && (
                 <div className="flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-2 rounded-md">
                   <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
                   <span className="font-medium">Officer Role Active: {formData.officerRole}</span>
@@ -2385,6 +2494,8 @@ export function CreateManualProfileForm({
           {isSubmitting ? "Creating..." : "Create Profile"}
         </Button>
       </div>
+            </>
+          )}
         </>
       )}
     </div>

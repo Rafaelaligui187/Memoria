@@ -11,12 +11,13 @@ interface AdvisoryFormProps {
   schoolYearId: string
   formData: {
     academicDepartment: string
-    academicYearLevels: string | string[]
+    academicYearLevel: string
     academicCourseProgram: string
-    academicSections: string | string[]
+    academicSection: string
+    academicMajor?: string
     messageToStudents?: string
   }
-  onInputChange: (field: string, value: string | string[]) => void
+  onInputChange: (field: string, value: string) => void
   errors?: Record<string, string>
 }
 
@@ -29,29 +30,18 @@ export function AdvisoryForm({
   const [departmentData, setDepartmentData] = useState<any>(null)
   const [availableAcademicYearLevels, setAvailableAcademicYearLevels] = useState<string[]>([])
   const [availableAcademicPrograms, setAvailableAcademicPrograms] = useState<string[]>([])
-  const [availableAcademicSections, setAvailableAcademicSections] = useState<{name: string, yearLevel: string}[]>([])
-
-  // Helper functions to handle both string and array formats
-  const parseArrayField = (value: string | string[]): string[] => {
-    if (Array.isArray(value)) return value
-    try {
-      return JSON.parse(value || "[]")
-    } catch {
-      return []
-    }
-  }
-
-  const formatArrayField = (value: string[]): string => {
-    return JSON.stringify(value)
-  }
-
-  // Get current values as arrays using useMemo to prevent infinite loops
-  const currentYearLevels = useMemo(() => parseArrayField(formData.academicYearLevels), [formData.academicYearLevels])
-  const currentSections = useMemo(() => parseArrayField(formData.academicSections), [formData.academicSections])
+  const [availableAcademicSections, setAvailableAcademicSections] = useState<string[]>([])
+  const [availableAcademicMajors, setAvailableAcademicMajors] = useState<string[]>([])
+  const [showMajorsDropdown, setShowMajorsDropdown] = useState(false)
+  const [isLoadingFormData, setIsLoadingFormData] = useState(true)
+  const [formDataError, setFormDataError] = useState<string | null>(null)
 
   // Fetch dynamic form data
   useEffect(() => {
     const fetchFormData = async () => {
+      setIsLoadingFormData(true)
+      setFormDataError(null)
+      
       try {
         const response = await fetch(`/api/admin/form-data?schoolYearId=${schoolYearId}`)
         const result = await response.json()
@@ -61,55 +51,15 @@ export function AdvisoryForm({
           console.log('Dynamic form data loaded for advisory form:', result.data.departments)
         } else {
           console.error('Failed to fetch form data:', result.error)
-          // Fallback to hardcoded data
-          setDepartmentData({
-            "Elementary": {
-              yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
-              programs: ["Elementary"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-            "Junior High": {
-              yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
-              programs: ["Junior High"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-            "Senior High": {
-              yearLevels: ["Grade 11", "Grade 12"],
-              programs: ["STEM", "ABM", "HUMSS", "GAS", "TVL"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-            "College": {
-              yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-              programs: ["BSIT", "BSCS", "BSIS", "BSA", "BSBA"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-          })
+          setFormDataError(`Failed to load academic data: ${result.error}`)
+          setDepartmentData({})
         }
       } catch (error) {
         console.error('Error fetching form data:', error)
-        // Fallback to hardcoded data
-        setDepartmentData({
-          "Elementary": {
-            yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
-            programs: ["Elementary"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-          "Junior High": {
-            yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
-            programs: ["Junior High"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-          "Senior High": {
-            yearLevels: ["Grade 11", "Grade 12"],
-            programs: ["STEM", "ABM", "HUMSS", "GAS", "TVL"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-          "College": {
-            yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-            programs: ["BSIT", "BSCS", "BSIS", "BSA", "BSBA"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-        })
+        setFormDataError('Failed to connect to database. Please check your connection and try again.')
+        setDepartmentData({})
+      } finally {
+        setIsLoadingFormData(false)
       }
     }
 
@@ -123,58 +73,72 @@ export function AdvisoryForm({
       setAvailableAcademicYearLevels(deptData.yearLevels || [])
       setAvailableAcademicPrograms(deptData.programs || [])
       
+      // Check if BSED is selected to show majors dropdown
+      if (formData.academicCourseProgram === "BSED") {
+        setShowMajorsDropdown(true)
+        setAvailableAcademicMajors(["English", "Math", "Science"])
+      } else {
+        setShowMajorsDropdown(false)
+        setAvailableAcademicMajors([])
+      }
+      
       // Reset dependent fields when department changes
-      onInputChange("academicYearLevels", formatArrayField([]))
+      onInputChange("academicYearLevel", "")
       onInputChange("academicCourseProgram", "")
-      onInputChange("academicSections", formatArrayField([]))
+      onInputChange("academicSection", "")
+      onInputChange("academicMajor", "")
       setAvailableAcademicSections([]) // Clear sections initially
     }
   }, [formData.academicDepartment, departmentData, onInputChange])
 
-  // Fetch filtered academic sections when course/program and year levels are selected
+  // Handle course/program change to show/hide majors dropdown
+  useEffect(() => {
+    if (formData.academicCourseProgram === "BSED") {
+      setShowMajorsDropdown(true)
+      setAvailableAcademicMajors(["English", "Math", "Science"])
+    } else {
+      setShowMajorsDropdown(false)
+      setAvailableAcademicMajors([])
+      // Reset major field when course changes
+      if (formData.academicMajor) {
+        onInputChange("academicMajor", "")
+      }
+    }
+  }, [formData.academicCourseProgram, onInputChange])
+
+  // Fetch filtered academic sections when course/program and year level are selected
   useEffect(() => {
     const fetchFilteredAcademicSections = async () => {
-      if (formData.academicDepartment && formData.academicCourseProgram && currentYearLevels.length > 0) {
+      // For BSED courses, we need major to be selected as well
+      const shouldFetchSections = formData.academicDepartment && 
+        formData.academicCourseProgram && 
+        formData.academicYearLevel &&
+        (formData.academicCourseProgram !== "BSED" || formData.academicMajor)
+      
+      if (shouldFetchSections) {
         try {
-          // Make multiple API calls for each selected year level
-          const sectionPromises = currentYearLevels.map(async (yearLevel) => {
-            const params = new URLSearchParams({
-              schoolYearId: schoolYearId,
-              department: formData.academicDepartment,
-              program: formData.academicCourseProgram,
-              yearLevel: yearLevel
-            })
-            
-            const response = await fetch(`/api/admin/form-data?${params}`)
-            const result = await response.json()
-            
-            if (result.success) {
-              // Return sections with their year level information
-              return (result.data.sections || []).map((section: string) => ({
-                name: section,
-                yearLevel: yearLevel
-              }))
-            }
-            return []
+          const params = new URLSearchParams({
+            schoolYearId: schoolYearId,
+            department: formData.academicDepartment,
+            program: formData.academicCourseProgram,
+            yearLevel: formData.academicYearLevel
           })
           
-          // Wait for all API calls to complete
-          const sectionResults = await Promise.all(sectionPromises)
+          // Add major parameter for BSED courses
+          if (formData.academicCourseProgram === "BSED" && formData.academicMajor) {
+            params.append('major', formData.academicMajor)
+          }
           
-          // Combine sections from all year levels
-          const allSections = sectionResults.flat()
+          const response = await fetch(`/api/admin/form-data?${params}`)
+          const result = await response.json()
           
-          setAvailableAcademicSections(allSections)
-          console.log(`Filtered academic sections for ${formData.academicDepartment} - ${formData.academicCourseProgram} - ${formData.academicYearLevels}:`, allSections)
-          
-          // Reset academic sections if current selections are not available
-          if (formData.academicSections?.length > 0) {
-            const availableSectionKeys = allSections.map(s => `${s.name}-${s.yearLevel}`)
-            const validSections = currentSections.filter((section: string) => 
-              availableSectionKeys.includes(section)
-            )
-            if (validSections.length !== currentSections.length) {
-              onInputChange("academicSections", formatArrayField(validSections))
+          if (result.success) {
+            setAvailableAcademicSections(result.data.sections || [])
+            console.log(`Filtered academic sections for ${formData.academicDepartment} - ${formData.academicCourseProgram} - ${formData.academicYearLevel}${formData.academicMajor ? ` - ${formData.academicMajor}` : ''}:`, result.data.sections)
+            
+            // Reset academic section if current selection is not available
+            if (formData.academicSection && !result.data.sections.includes(formData.academicSection)) {
+              onInputChange("academicSection", "")
             }
           }
         } catch (error) {
@@ -183,14 +147,14 @@ export function AdvisoryForm({
       } else {
         // If not all required fields are selected, clear sections
         setAvailableAcademicSections([])
-        if (currentSections.length > 0) {
-          onInputChange("academicSections", formatArrayField([]))
+        if (formData.academicSection) {
+          onInputChange("academicSection", "")
         }
       }
     }
 
     fetchFilteredAcademicSections()
-  }, [formData.academicDepartment, formData.academicCourseProgram, formData.academicYearLevels, schoolYearId, onInputChange])
+  }, [formData.academicDepartment, formData.academicCourseProgram, formData.academicYearLevel, formData.academicMajor, schoolYearId, onInputChange])
 
   return (
     <Card className="p-6">
@@ -204,15 +168,45 @@ export function AdvisoryForm({
         </CardTitle>
       </CardHeader>
       <CardContent className="px-0 pb-0 space-y-4">
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <div className="flex items-start gap-2">
-            <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-            <div className="text-sm text-blue-800">
-              <p className="font-medium mb-1">Advisory Role Information</p>
-              <p>If you select academic information below, your profile will automatically appear as an adviser on the respective Yearbook pages. You can select multiple sections and year levels if you handle multiple advisories.</p>
+        {/* Loading State */}
+        {isLoadingFormData && (
+          <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+            <div className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
+              <div className="text-sm text-yellow-800">
+                <p className="font-medium">Loading academic data...</p>
+                <p>Please wait while we fetch the latest academic information from the database.</p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Error State */}
+        {formDataError && (
+          <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+            <div className="flex items-start gap-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full mt-2"></div>
+              <div className="text-sm text-red-800">
+                <p className="font-medium mb-1">Unable to load academic data</p>
+                <p>{formDataError}</p>
+                <p className="mt-2 text-xs">Please refresh the page or contact support if the issue persists.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Form Content - Only show when data is loaded */}
+        {!isLoadingFormData && !formDataError && (
+          <>
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <div className="flex items-start gap-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                <div className="text-sm text-blue-800">
+                  <p className="font-medium mb-1">Academic Information</p>
+                  <p>Select the department, year level, course/program, and section/block for your advisory role. Your profile will appear as an adviser on the respective Yearbook pages.</p>
+                </div>
+              </div>
+            </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
@@ -222,9 +216,9 @@ export function AdvisoryForm({
               onValueChange={(value) => {
                 onInputChange("academicDepartment", value)
                 // Reset dependent fields when department changes
-                onInputChange("academicYearLevels", formatArrayField([]))
+                onInputChange("academicYearLevel", "")
                 onInputChange("academicCourseProgram", "")
-                onInputChange("academicSections", formatArrayField([]))
+                onInputChange("academicSection", "")
               }}
             >
               <SelectTrigger className={errors.academicDepartment ? "border-red-500" : ""}>
@@ -246,8 +240,9 @@ export function AdvisoryForm({
               value={formData.academicCourseProgram} 
               onValueChange={(value) => {
                 onInputChange("academicCourseProgram", value)
-                // Reset sections when course changes
-                onInputChange("academicSections", formatArrayField([]))
+                // Reset sections and major when course changes
+                onInputChange("academicSection", "")
+                onInputChange("academicMajor", "")
               }}
             >
               <SelectTrigger className={errors.academicCourseProgram ? "border-red-500" : ""}>
@@ -265,61 +260,72 @@ export function AdvisoryForm({
           </div>
         </div>
 
+        {/* Selective Majors for BSED */}
+        {showMajorsDropdown && (
+          <div className="space-y-2">
+            <Label htmlFor="academicMajor">Selective Major *</Label>
+            <Select 
+              value={formData.academicMajor || ""} 
+              onValueChange={(value) => onInputChange("academicMajor", value)}
+            >
+              <SelectTrigger className={errors.academicMajor ? "border-red-500" : ""}>
+                <SelectValue placeholder="Select major" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableAcademicMajors.map((major) => (
+                  <SelectItem key={major} value={major}>
+                    {major}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.academicMajor && <p className="text-sm text-red-500">{errors.academicMajor}</p>}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label htmlFor="academicYearLevels">Year Levels (Multiple Selection)</Label>
-            <div className="space-y-2">
-              {availableAcademicYearLevels.map((level) => (
-                <div key={level} className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id={`year-${level}`}
-                    checked={currentYearLevels.includes(level)}
-                    onChange={(e) => {
-                      const currentLevels = currentYearLevels
-                      const newLevels = e.target.checked
-                        ? [...currentLevels, level]
-                        : currentLevels.filter((l: string) => l !== level)
-                      onInputChange("academicYearLevels", formatArrayField(newLevels))
-                    }}
-                    className="rounded border-gray-300"
-                  />
-                  <Label htmlFor={`year-${level}`} className="text-sm font-normal">
+            <Label htmlFor="academicYearLevel">Year Level</Label>
+            <Select 
+              value={formData.academicYearLevel} 
+              onValueChange={(value) => {
+                onInputChange("academicYearLevel", value)
+                // Reset section when year level changes
+                onInputChange("academicSection", "")
+              }}
+            >
+              <SelectTrigger className={errors.academicYearLevel ? "border-red-500" : ""}>
+                <SelectValue placeholder="Select year level" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableAcademicYearLevels.map((level) => (
+                  <SelectItem key={level} value={level}>
                     {level}
-                  </Label>
-                </div>
-              ))}
-            </div>
-            {errors.academicYearLevels && <p className="text-sm text-red-500">{errors.academicYearLevels}</p>}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.academicYearLevel && <p className="text-sm text-red-500">{errors.academicYearLevel}</p>}
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="academicSections">Sections/Blocks (Multiple Selection)</Label>
-            <div className="space-y-2 max-h-32 overflow-y-auto">
-              {availableAcademicSections.map((section) => (
-                <div key={`${section.name}-${section.yearLevel}`} className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id={`section-${section.name}-${section.yearLevel}`}
-                    checked={currentSections.includes(`${section.name}-${section.yearLevel}`)}
-                    onChange={(e) => {
-                      const currentSectionsArray = currentSections
-                      const sectionKey = `${section.name}-${section.yearLevel}`
-                      const newSections = e.target.checked
-                        ? [...currentSectionsArray, sectionKey]
-                        : currentSectionsArray.filter((s: string) => s !== sectionKey)
-                      onInputChange("academicSections", formatArrayField(newSections))
-                    }}
-                    className="rounded border-gray-300"
-                  />
-                  <Label htmlFor={`section-${section.name}-${section.yearLevel}`} className="text-sm font-normal">
-                    <span className="font-medium">{section.name}</span>
-                    <span className="text-blue-600 ml-2 text-xs">({section.yearLevel})</span>
-                  </Label>
-                </div>
-              ))}
-            </div>
-            {errors.academicSections && <p className="text-sm text-red-500">{errors.academicSections}</p>}
+            <Label htmlFor="academicSection">Section/Block</Label>
+            <Select 
+              value={formData.academicSection} 
+              onValueChange={(value) => onInputChange("academicSection", value)}
+            >
+              <SelectTrigger className={errors.academicSection ? "border-red-500" : ""}>
+                <SelectValue placeholder="Select section/block" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableAcademicSections.map((section) => (
+                  <SelectItem key={section} value={section}>
+                    {section}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.academicSection && <p className="text-sm text-red-500">{errors.academicSection}</p>}
           </div>
         </div>
 
@@ -338,7 +344,7 @@ export function AdvisoryForm({
           {errors.messageToStudents && <p className="text-sm text-red-500">{errors.messageToStudents}</p>}
         </div>
 
-        {(formData.academicYearLevels?.length > 0 || formData.academicSections?.length > 0) && (
+        {(formData.academicYearLevel || formData.academicSection) && (
           <div className="bg-green-50 p-4 rounded-lg border border-green-200">
             <div className="flex items-start gap-2">
               <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
@@ -348,6 +354,8 @@ export function AdvisoryForm({
               </div>
             </div>
           </div>
+        )}
+          </>
         )}
       </CardContent>
     </Card>

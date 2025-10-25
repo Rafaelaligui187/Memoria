@@ -3,56 +3,71 @@ import { MongoClient, ObjectId } from 'mongodb'
 
 const MONGODB_URI = process.env.MONGODB_URI || "mongodb+srv://aliguirafael:group8@cluster0.ofoka.mongodb.net/Memoria?retryWrites=true&w=majority"
 
+// Cache for form data to avoid repeated database calls
+const formDataCache = new Map<string, { data: any, timestamp: number }>()
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+
 // GET /api/admin/form-data - Get dynamic form data for a specific school year
 export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const schoolYearId = searchParams.get('schoolYearId')
+  const department = searchParams.get('department')
+  const program = searchParams.get('program') // course/strand name
+  const yearLevel = searchParams.get('yearLevel')
+  const major = searchParams.get('major') // major name for College courses
+  
+  if (!schoolYearId) {
+    return NextResponse.json(
+      { success: false, error: 'School year ID is required' },
+      { status: 400 }
+    )
+  }
+  
+  // Check cache first
+  const cacheKey = `${schoolYearId}-${department || 'all'}-${program || 'all'}-${yearLevel || 'all'}-${major || 'all'}`
+  const cached = formDataCache.get(cacheKey)
+  
+  if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+    console.log('Returning cached form data for:', schoolYearId)
+    return NextResponse.json({
+      success: true,
+      data: cached.data
+    })
+  }
+  
   const client = new MongoClient(MONGODB_URI)
   
   try {
     await client.connect()
     const db = client.db('Memoria')
     
-    const { searchParams } = new URL(request.url)
-    const schoolYearId = searchParams.get('schoolYearId')
-    const department = searchParams.get('department')
-    const program = searchParams.get('program') // course/strand name
-    const yearLevel = searchParams.get('yearLevel')
-    const major = searchParams.get('major') // major name for College courses
-    
-    if (!schoolYearId) {
-      return NextResponse.json(
-        { success: false, error: 'School year ID is required' },
-        { status: 400 }
-      )
-    }
-    
     console.log('Fetching form data for school year:', schoolYearId)
     
-    // Fetch courses for College department
-    const coursesCollection = db.collection('courses')
-    const courses = await coursesCollection.find({ 
-      schoolYearId: schoolYearId,
-      department: 'college'
-    }).toArray()
-    
-    // Fetch course majors from the new collection
-    const courseMajorsCollection = db.collection('course-majors')
-    const courseMajors = await courseMajorsCollection.find({
-      schoolYearId: schoolYearId,
-      isActive: true
-    }).toArray()
-    
-    // Fetch strands for Senior High department
-    const strandsCollection = db.collection('strands')
-    const strands = await strandsCollection.find({ 
-      schoolYearId: schoolYearId,
-      department: 'senior-high'
-    }).toArray()
-    
-    // Fetch sections/blocks for all departments
-    const sectionsCollection = db.collection('sections')
-    const sections = await sectionsCollection.find({ 
-      schoolYearId: schoolYearId
-    }).toArray()
+    // Execute all database queries in parallel for better performance
+    const [courses, courseMajors, strands, sections] = await Promise.all([
+      // Fetch courses for College department
+      db.collection('courses').find({ 
+        schoolYearId: schoolYearId,
+        department: 'college'
+      }).toArray(),
+      
+      // Fetch course majors from the new collection
+      db.collection('course-majors').find({
+        schoolYearId: schoolYearId,
+        isActive: true
+      }).toArray(),
+      
+      // Fetch strands for Senior High department
+      db.collection('strands').find({ 
+        schoolYearId: schoolYearId,
+        department: 'senior-high'
+      }).toArray(),
+      
+      // Fetch sections/blocks for all departments
+      db.collection('sections').find({ 
+        schoolYearId: schoolYearId
+      }).toArray()
+    ])
     
     console.log('Found courses:', courses.length)
     console.log('Found strands:', strands.length)
@@ -89,15 +104,30 @@ export async function GET(request: NextRequest) {
 
       console.log(`Filtered sections for ${department} - ${program} - ${yearLevel}${major ? ` - ${major}` : ''}:`, filteredSections)
       
+      const responseData = {
+        sections: filteredSections
+      }
+      
+      // Cache the filtered result
+      formDataCache.set(cacheKey, { data: responseData, timestamp: Date.now() })
+      
       return NextResponse.json({
         success: true,
-        data: {
-          sections: filteredSections
-        }
+        data: responseData
       })
     }
     
-    // Organize data by department (initial load)
+    // Pre-process course majors for faster lookup
+    const courseMajorsMap = new Map()
+    courseMajors.forEach(cm => {
+      const courseId = cm.courseId.toString()
+      if (!courseMajorsMap.has(courseId)) {
+        courseMajorsMap.set(courseId, [])
+      }
+      courseMajorsMap.get(courseId).push(cm.majorName)
+    })
+    
+    // Organize data by department (initial load) - optimized processing
     const formData = {
       departments: {
         'Elementary': {
@@ -129,14 +159,12 @@ export async function GET(request: NextRequest) {
             .map(s => s.name)
         }
       },
-      // Additional data for specific programs
+      // Additional data for specific programs - optimized processing
       programDetails: {
-        // College course details
+        // College course details - using pre-processed map for better performance
         ...courses.reduce((acc, course) => {
-          // Get majors for this course from the course-majors collection
-          const courseMajorsForThisCourse = courseMajors.filter(cm => 
-            cm.courseId.toString() === course._id.toString()
-          ).map(cm => cm.majorName)
+          const courseId = course._id.toString()
+          const courseMajorsForThisCourse = courseMajorsMap.get(courseId) || []
           
           acc[course.name] = {
             majorType: course.majorType || 'no-major',
@@ -157,6 +185,9 @@ export async function GET(request: NextRequest) {
         }, {} as any)
       }
     }
+    
+    // Cache the full result
+    formDataCache.set(cacheKey, { data: formData, timestamp: Date.now() })
     
     return NextResponse.json({
       success: true,

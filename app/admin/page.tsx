@@ -12,9 +12,6 @@ import {
   Clock,
   BarChart3,
   History,
-  Settings,
-  CheckCircle,
-  XCircle,
 } from "lucide-react"
 
 import { AccountManagement } from "@/components/account-management"
@@ -22,10 +19,9 @@ import { ProfileApprovalSystem } from "@/components/profile-approval-system"
 import { MediaManagement } from "@/components/media-management"
 import { ReportsManagement } from "@/components/reports-management"
 import { AuditLogsSystem } from "@/components/audit-logs-system"
-import { YearSettingsSystem } from "@/components/year-settings-system"
 import { YearbookManagement } from "@/components/yearbook-management"
-import { ActivityFeed } from "@/components/activity-feed"
 import { OverallData } from "@/components/overall-data"
+import { UserTypeDistributionChart } from "@/components/user-type-distribution-chart"
 import { useAdminStats } from "@/hooks/use-admin-stats"
 
 export default function AdminDashboardPage() {
@@ -204,7 +200,7 @@ export default function AdminDashboardPage() {
             localStorage.setItem('adminActiveSection', value)
           }
         }} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8">
+          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7">
             <TabsTrigger value="overall" className="flex items-center gap-1 hover:bg-blue-100 hover:text-blue-800 active:bg-blue-300 active:text-blue-900 transition-all duration-200">
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">Overall Data</span>
@@ -226,10 +222,6 @@ export default function AdminDashboardPage() {
               <History className="h-4 w-4" />
               <span className="hidden sm:inline">Audit Logs</span>
             </TabsTrigger>
-            <TabsTrigger value="settings" className="flex items-center gap-1 hover:bg-blue-100 hover:text-blue-800 active:bg-blue-300 active:text-blue-900 transition-all duration-200">
-              <Settings className="h-4 w-4" />
-              <span className="hidden sm:inline">Year Settings</span>
-            </TabsTrigger>
           </TabsList>
 
         <TabsContent value="overall" className="space-y-4">
@@ -246,10 +238,6 @@ export default function AdminDashboardPage() {
 
         <TabsContent value="audit-logs" className="space-y-4" key={`audit-logs-${selectedYear}`}>
           <AuditLogsSystem selectedYear={selectedYear} selectedYearLabel={selectedYearLabel} />
-        </TabsContent>
-
-        <TabsContent value="settings" className="space-y-4" key={`settings-${selectedYear}`}>
-          <YearSettingsSystem selectedYear={selectedYear} selectedYearLabel={selectedYearLabel} />
         </TabsContent>
       </Tabs>
       ) : (
@@ -328,71 +316,20 @@ export default function AdminDashboardPage() {
                 </Card>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                {/* Pending Approvals */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Clock className="h-5 w-5 text-amber-500" />
-                      Pending Profile Approvals
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    {statsLoading ? (
-                      <div className="space-y-3">
-                        {[1, 2, 3].map((i) => (
-                          <div key={i} className="animate-pulse p-3 border rounded-lg">
-                            <div className="h-4 bg-gray-200 rounded w-1/2 mb-2"></div>
-                            <div className="h-3 bg-gray-200 rounded w-3/4 mb-1"></div>
-                            <div className="h-3 bg-gray-200 rounded w-1/4"></div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : stats?.pendingApprovals && stats.pendingApprovals.length > 0 ? (
-                      stats.pendingApprovals.map((item, index) => (
-                        <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                          <div>
-                            <p className="font-medium">{item.fullName}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {item.department}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(item.createdAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button 
-                              onClick={() => {
-                                // TODO: Handle approve action
-                                window.location.href = `/admin/profiles/${item._id}/approve`
-                              }}
-                              className="text-green-600 border-green-600 bg-transparent border rounded p-1 hover:bg-green-50"
-                            >
-                              <CheckCircle className="h-4 w-4" />
-                            </button>
-                            <button 
-                              onClick={() => {
-                                // TODO: Handle reject action
-                                window.location.href = `/admin/profiles/${item._id}/reject`
-                              }}
-                              className="text-red-600 border-red-600 bg-transparent border rounded p-1 hover:bg-red-50"
-                            >
-                              <XCircle className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-center py-6 text-muted-foreground">
-                        <Clock className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                        <p>No pending approvals</p>
-                        <p className="text-sm">All profiles have been reviewed</p>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <ActivityFeed selectedYear={selectedYear} showUserActions={false} />
+              {/* User Type Distribution Chart */}
+              <div className="grid gap-4 md:grid-cols-1">
+                <UserTypeDistributionChart 
+                  userTypeCounts={stats?.userTypeCounts || {
+                    students: 0,
+                    faculty: 0,
+                    staff: 0,
+                    alumni: 0,
+                    arSisters: 0,
+                    utility: 0,
+                    advisory: 0
+                  }}
+                  loading={statsLoading}
+                />
               </div>
             </>
           )}

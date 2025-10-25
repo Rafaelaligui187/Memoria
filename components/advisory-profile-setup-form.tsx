@@ -69,9 +69,10 @@ export function AdvisoryProfileSetupForm({
     
     // Academic Information (for advisory roles)
     academicDepartment: "",
-    academicYearLevels: "[]",
+    academicYearLevel: "",
     academicCourseProgram: "",
-    academicSections: "[]",
+    academicSection: "",
+    academicMajor: "",
 
     // Additional Info
     courses: "",
@@ -487,9 +488,10 @@ export function AdvisoryProfileSetupForm({
         schoolYearId={schoolYearId}
         formData={{
           academicDepartment: formData.academicDepartment || "",
-          academicYearLevels: formData.academicYearLevels || "[]",
+          academicYearLevel: formData.academicYearLevel || "",
           academicCourseProgram: formData.academicCourseProgram || "",
-          academicSections: formData.academicSections || "[]",
+          academicSection: formData.academicSection || "",
+          academicMajor: formData.academicMajor || "",
           messageToStudents: formData.messageToStudents || ""
         }}
         onInputChange={handleInputChange}

@@ -34,6 +34,8 @@ export default function FacultyPage() {
   const [loadingSchoolYears, setLoadingSchoolYears] = useState(true)
   const [facultyData, setFacultyData] = useState<any[]>([])
   const [loadingFaculty, setLoadingFaculty] = useState(true)
+  const [availableDepartments, setAvailableDepartments] = useState<string[]>([])
+  const [loadingDepartments, setLoadingDepartments] = useState(true)
 
   // Fixed department options for role-based filtering
   const departmentFilterOptions = [
@@ -48,6 +50,7 @@ export default function FacultyPage() {
     setAuthenticated(isAuthenticated())
     fetchSchoolYears()
     fetchFacultyData()
+    fetchAvailableDepartments()
 
     // Listen for school year updates from admin interface
     const handleSchoolYearsUpdate = () => {
@@ -59,6 +62,7 @@ export default function FacultyPage() {
     const handleFacultyUpdate = () => {
       console.log('Faculty profiles updated event received')
       fetchFacultyData()
+      fetchAvailableDepartments()
     }
 
     window.addEventListener('schoolYearsUpdated', handleSchoolYearsUpdate)
@@ -74,6 +78,7 @@ export default function FacultyPage() {
   useEffect(() => {
     if (selectedSchoolYear) {
       fetchFacultyData()
+      fetchAvailableDepartments()
     }
   }, [selectedSchoolYear, selectedDepartment])
 
@@ -102,6 +107,7 @@ export default function FacultyPage() {
       if (result.success && result.data) {
         setFacultyData(result.data)
         console.log('[Faculty Page] Loaded faculty data:', result.data.length, 'profiles')
+        console.log('[Faculty Page] Faculty years of service:', result.data.map(f => ({ name: f.name, yearsOfService: f.yearsOfService })))
       } else {
         console.error('[Faculty Page] Failed to fetch faculty data:', result.error)
         // Fallback to empty array if API fails
@@ -113,6 +119,41 @@ export default function FacultyPage() {
       setFacultyData([])
     } finally {
       setLoadingFaculty(false)
+    }
+  }
+
+  const fetchAvailableDepartments = async () => {
+    try {
+      setLoadingDepartments(true)
+      const params = new URLSearchParams()
+      
+      if (selectedSchoolYear) {
+        params.append('schoolYearId', selectedSchoolYear)
+      }
+
+      const response = await fetch(`/api/faculty/departments?${params.toString()}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      })
+      
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        setAvailableDepartments(result.data)
+        console.log('[Faculty Page] Loaded available departments:', result.data)
+      } else {
+        console.error('[Faculty Page] Failed to fetch departments:', result.error)
+        // Fallback to empty array if API fails
+        setAvailableDepartments([])
+      }
+    } catch (error) {
+      console.error('[Faculty Page] Error fetching departments:', error)
+      // Fallback to empty array if API fails
+      setAvailableDepartments([])
+    } finally {
+      setLoadingDepartments(false)
     }
   }
 
@@ -152,13 +193,72 @@ export default function FacultyPage() {
   }
 
   const filteredFaculty = facultyData.filter((faculty) => {
-    const matchesDepartment =
-      selectedDepartment === "All" ||
-      (selectedDepartment === "AR Sisters" && faculty.isARSister) ||
-      (selectedDepartment === "Faculty" && (faculty.hierarchy === "faculty" || faculty.hierarchy === "department_head" || faculty.hierarchy === "directress" || faculty.hierarchy === "superior")) ||
-      (selectedDepartment === "Staff" && faculty.hierarchy === "staff") ||
-      (selectedDepartment === "Utility" && faculty.hierarchy === "utility") ||
-      faculty.department === selectedDepartment
+    let matchesDepartment = false
+    
+    if (selectedDepartment === "All") {
+      matchesDepartment = true
+    } else if (selectedDepartment === "Faculty") {
+      // For Faculty filter, look for teaching positions and exclude staff/utility
+      const isTeachingPosition = faculty.position && (
+        faculty.position.toLowerCase().includes('teacher') ||
+        faculty.position.toLowerCase().includes('instructor') ||
+        faculty.position.toLowerCase().includes('professor') ||
+        faculty.position.toLowerCase().includes('subject teacher') ||
+        faculty.position.toLowerCase().includes('department head')
+      )
+      
+      const isAcademicDepartment = faculty.department && (
+        faculty.department.toLowerCase().includes('department') ||
+        faculty.department.toLowerCase().includes('college') ||
+        faculty.department.toLowerCase().includes('senior high') ||
+        faculty.department.toLowerCase().includes('junior high') ||
+        faculty.department.toLowerCase().includes('elementary')
+      )
+      
+      const isNotStaffOrUtility = !(
+        (faculty.position && (
+          faculty.position.toLowerCase().includes('staff') ||
+          faculty.position.toLowerCase().includes('librarian') ||
+          faculty.position.toLowerCase().includes('utility') ||
+          faculty.position.toLowerCase().includes('maintenance') ||
+          faculty.position.toLowerCase().includes('electrician')
+        )) ||
+        (faculty.department && (
+          faculty.department.toLowerCase().includes('staff') ||
+          faculty.department.toLowerCase().includes('utility')
+        ))
+      )
+      
+      matchesDepartment = (isTeachingPosition || isAcademicDepartment) && isNotStaffOrUtility
+    } else if (selectedDepartment === "Master Teacher") {
+      matchesDepartment = Number(faculty.yearsOfService) >= 15
+    } else {
+      matchesDepartment = faculty.department === selectedDepartment ||
+                         faculty.departmentAssigned === selectedDepartment
+    }
+
+    // Debug logging for Faculty filtering
+    if (selectedDepartment === "Faculty") {
+      console.log('🔍 Faculty Filter Debug:', {
+        facultyName: faculty.name,
+        position: faculty.position,
+        department: faculty.department,
+        matchesDepartment,
+        selectedDepartment
+      })
+    }
+
+    // Debug logging for Master Teacher filtering
+    if (selectedDepartment === "Master Teacher") {
+      console.log('🔍 Master Teacher Filter Debug:', {
+        facultyName: faculty.name,
+        yearsOfService: faculty.yearsOfService,
+        yearsOfServiceType: typeof faculty.yearsOfService,
+        yearsOfServiceNumber: Number(faculty.yearsOfService),
+        meetsCriteria: Number(faculty.yearsOfService) >= 15,
+        selectedDepartment
+      })
+    }
 
     // Get the selected school year label for comparison
     const selectedYearLabel = schoolYears.find(year => year._id === selectedSchoolYear)?.yearLabel
@@ -167,7 +267,8 @@ export default function FacultyPage() {
     const matchesSearch =
       faculty.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       faculty.position.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      faculty.department.toLowerCase().includes(searchQuery.toLowerCase())
+      (faculty.department && faculty.department.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (faculty.departmentAssigned && faculty.departmentAssigned.toLowerCase().includes(searchQuery.toLowerCase()))
     return matchesDepartment && matchesSchoolYear && matchesSearch
   })
 
@@ -203,6 +304,7 @@ export default function FacultyPage() {
   console.log('🎓 Department Heads:', departmentHeads.length, departmentHeads)
   console.log('👨‍🏫 Regular Faculty:', regularFaculty.length)
   console.log('📊 All Faculty Data:', facultyData)
+  console.log('🔍 Filtered Faculty for selected department:', selectedDepartment, filteredFaculty.length, filteredFaculty)
 
   const sortedFaculty = [...filteredFaculty].sort((a, b) => {
     switch (sortBy) {
@@ -322,7 +424,7 @@ export default function FacultyPage() {
                       
                       {/* Primary AR Sister (Directress/Superior) - Large card at top */}
                       {arSisters.filter(sister => sister.hierarchy === "directress" || sister.hierarchy === "superior").length > 0 && (
-                        <div className="flex justify-center items-center mb-12">
+                        <div className="flex justify-center items-center mb-0">
                           <div className="w-full max-w-sm mx-auto">
                             {arSisters.filter(sister => sister.hierarchy === "directress" || sister.hierarchy === "superior").map((sister, index) => (
                               <motion.div
@@ -368,10 +470,20 @@ export default function FacultyPage() {
                         </div>
                       )}
 
-                      {/* Purple connecting line */}
+                      {/* Vertical line extending from bottom edge of AR Sisters leadership card */}
                       {arSisters.filter(sister => sister.hierarchy !== "directress" && sister.hierarchy !== "superior").length > 0 && (
-                        <div className="flex justify-center mb-8">
-                          <div className="w-1 h-8 bg-gradient-to-b from-purple-500 to-purple-400 rounded-full"></div>
+                        <div className="flex justify-center mt-3 mb-0">
+                          <div className="w-1 h-8 bg-gradient-to-b from-purple-500 to-purple-400 rounded-full animate-pulse"></div>
+                        </div>
+                      )}
+
+                      {/* Continuous vertical line with horizontal intersection */}
+                      {arSisters.filter(sister => sister.hierarchy !== "directress" && sister.hierarchy !== "superior").length > 0 && (
+                        <div className="relative flex justify-center items-center mb-8">
+                          {/* Continuous horizontal line */}
+                          <div className="w-full h-1 bg-gradient-to-r from-transparent via-purple-500 to-transparent rounded-full z-10 animate-pulse"></div>
+                          {/* Vertical line extending through horizontal */}
+                          <div className="absolute w-1 h-24 bg-gradient-to-b from-purple-500 to-purple-400 rounded-full z-0 animate-pulse"></div>
                         </div>
                       )}
 
@@ -429,7 +541,7 @@ export default function FacultyPage() {
                     </div>
                   )}
 
-                  {/* Department Sections */}
+                  {/* Department Sections - Only show when "All" is selected */}
                   {departments.length > 0 && selectedDepartment === "All" ? (
                     departments.map((department, deptIndex) => {
                       const deptFaculty = facultyByDepartment[department].filter(f => !f.isARSister)
@@ -459,105 +571,115 @@ export default function FacultyPage() {
                           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-8">{department}</h2>
                           <div className="w-24 h-1 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full mx-auto mb-8"></div>
                         
-                        {/* Department Head - Large card at center-top */}
-                        {deptHead && (
-                          <div className="flex justify-center items-center mb-12">
-                            <div className="w-full max-w-sm mx-auto">
-                              <motion.div
-                                initial={{ opacity: 0, y: 30, scale: 0.9 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                transition={{ duration: 0.5, delay: deptIndex * 0.1 }}
-                                className="flex justify-center"
-                              >
-                                <Link href={`/faculty/${deptHead.id}`}>
-                                  <Card className="group overflow-hidden hover:shadow-2xl transition-all duration-700 bg-white border-2 border-red-200 hover:border-red-400 transform hover:-translate-y-2 w-full max-w-md shadow-lg">
-                                    <div className="relative overflow-hidden">
-                                      <div className="aspect-square overflow-hidden">
-                                        <Image
-                                          src={deptHead.image || "/placeholder.svg"}
-                                          alt={deptHead.name}
-                                          width={400}
-                                          height={400}
-                                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                                        />
+                          {/* Department Head - Large card at center-top */}
+                          {deptHead && (
+                            <div className="flex justify-center items-center mb-0">
+                              <div className="w-full max-w-sm mx-auto">
+                                <motion.div
+                                  initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                                  transition={{ duration: 0.5, delay: deptIndex * 0.1 }}
+                                  className="flex justify-center"
+                                >
+                                  <Link href={`/faculty/${deptHead.id}`}>
+                                    <Card className="group overflow-hidden hover:shadow-2xl transition-all duration-700 bg-white border-2 border-red-200 hover:border-red-400 transform hover:-translate-y-2 w-full max-w-md shadow-lg">
+                                      <div className="relative overflow-hidden">
+                                        <div className="aspect-square overflow-hidden">
+                                          <Image
+                                            src={deptHead.image || "/placeholder.svg"}
+                                            alt={deptHead.name}
+                                            width={400}
+                                            height={400}
+                                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                          />
+                                        </div>
+                                        <div className="absolute top-4 right-4">
+                                          <Badge className="bg-gradient-to-r from-red-500 to-red-600 text-white border-0 px-4 py-2 text-sm font-bold shadow-lg">
+                                            {deptHead.position}
+                                          </Badge>
+                                        </div>
                                       </div>
-                                      <div className="absolute top-4 right-4">
-                                        <Badge className="bg-gradient-to-r from-red-500 to-red-600 text-white border-0 px-4 py-2 text-sm font-bold shadow-lg">
-                                          {deptHead.position}
-                                        </Badge>
-                                      </div>
-                                    </div>
-                                    <CardContent className="p-8 text-center">
-                                      <h3 className="font-bold text-2xl text-gray-900 mb-3 group-hover:text-red-600 transition-colors">
-                                        {deptHead.name}
-                                      </h3>
-                                      <p className="text-red-600 font-semibold text-base mb-3">{deptHead.position}</p>
-                                      <div className="flex items-center justify-center gap-2 text-gray-500 text-base">
-                                        <Star className="h-4 w-4 text-yellow-500" />
-                                        <span>{deptHead.yearsOfService} years of excellence</span>
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                </Link>
-                              </motion.div>
+                                      <CardContent className="p-8 text-center">
+                                        <h3 className="font-bold text-2xl text-gray-900 mb-3 group-hover:text-red-600 transition-colors">
+                                          {deptHead.name}
+                                        </h3>
+                                        <p className="text-red-600 font-semibold text-base mb-3">{deptHead.position}</p>
+                                        <div className="flex items-center justify-center gap-2 text-gray-500 text-base">
+                                          <Star className="h-4 w-4 text-yellow-500" />
+                                          <span>{deptHead.yearsOfService} years of excellence</span>
+                                        </div>
+                                      </CardContent>
+                                    </Card>
+                                  </Link>
+                                </motion.div>
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                        {/* Purple connecting line */}
-                        {deptTeachers.length > 0 && (
-                          <div className="flex justify-center mb-8">
-                            <div className="w-1 h-8 bg-gradient-to-b from-purple-500 to-purple-400 rounded-full"></div>
-                          </div>
-                        )}
+                          {/* Vertical line extending from bottom edge of department head card */}
+                          {deptTeachers.length > 0 && (
+                            <div className="flex justify-center mt-3 mb-0">
+                              <div className="w-1 h-8 bg-gradient-to-b from-purple-500 to-purple-400 rounded-full animate-pulse"></div>
+                            </div>
+                          )}
 
-                        {/* Department Teachers - Grid layout */}
-                        {deptTeachers.length > 0 && (
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {deptTeachers.map((teacher, index) => (
-                              <motion.div
-                                key={teacher.id}
-                                initial={{ opacity: 0, y: 30, scale: 0.9 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                transition={{ duration: 0.5, delay: deptIndex * 0.1 + index * 0.05 }}
-                              >
-                                <Link href={`/faculty/${teacher.id}`}>
-                                  <Card className="group overflow-hidden hover:shadow-2xl transition-all duration-700 h-full bg-white border-2 border-gray-100 hover:border-blue-300 transform hover:-translate-y-2">
-                                    <div className="relative overflow-hidden">
-                                      <div className="aspect-square overflow-hidden">
-                                        <Image
-                                          src={teacher.image || "/placeholder.svg"}
-                                          alt={teacher.name}
-                                          width={200}
-                                          height={200}
-                                          className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-                                        />
+                          {/* Continuous vertical line with horizontal intersection */}
+                          {deptTeachers.length > 0 && (
+                            <div className="relative flex justify-center items-center mb-8">
+                              {/* Continuous horizontal line */}
+                              <div className="w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent rounded-full z-10 animate-pulse"></div>
+                              {/* Vertical line extending through horizontal */}
+                              <div className="absolute w-1 h-24 bg-gradient-to-b from-purple-500 to-purple-400 rounded-full z-0 animate-pulse"></div>
+                            </div>
+                          )}
+
+                          {/* Department Teachers - Grid layout */}
+                          {deptTeachers.length > 0 && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                              {deptTeachers.map((teacher, index) => (
+                                <motion.div
+                                  key={teacher.id}
+                                  initial={{ opacity: 0, y: 30, scale: 0.9 }}
+                                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                                  transition={{ duration: 0.5, delay: deptIndex * 0.1 + index * 0.05 }}
+                                >
+                                  <Link href={`/faculty/${teacher.id}`}>
+                                    <Card className="group overflow-hidden hover:shadow-2xl transition-all duration-700 h-full bg-white border-2 border-gray-100 hover:border-blue-300 transform hover:-translate-y-2">
+                                      <div className="relative overflow-hidden">
+                                        <div className="aspect-square overflow-hidden">
+                                          <Image
+                                            src={teacher.image || "/placeholder.svg"}
+                                            alt={teacher.name}
+                                            width={200}
+                                            height={200}
+                                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                          />
+                                        </div>
+                                        <div className="absolute top-3 right-3">
+                                          <Badge className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-0 px-3 py-1 text-xs font-bold shadow-lg">
+                                            {teacher.position}
+                                          </Badge>
+                                        </div>
                                       </div>
-                                      <div className="absolute top-3 right-3">
-                                        <Badge className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white border-0 px-3 py-1 text-xs font-bold shadow-lg">
-                                          {teacher.position}
-                                        </Badge>
-                                      </div>
-                                    </div>
-                                    <CardContent className="p-4 text-center">
-                                      <h3 className="font-bold text-lg text-gray-900 mb-2 group-hover:text-blue-600 transition-colors line-clamp-2">
-                                        {teacher.name}
-                                      </h3>
-                                      <p className="text-blue-600 font-semibold text-sm mb-2 line-clamp-1">{teacher.position}</p>
-                                      <div className="flex items-center justify-center gap-1 text-gray-500 text-sm">
-                                        <Star className="h-3 w-3 text-yellow-500" />
-                                        <span>{teacher.yearsOfService} years</span>
-                                      </div>
-                                    </CardContent>
-                                  </Card>
-                                </Link>
-                              </motion.div>
-                            ))}
-                          </div>
-                        )}
-                      </motion.div>
-                    )
-                  })
+                                      <CardContent className="p-4 text-center">
+                                        <h3 className="font-bold text-lg text-gray-900 mb-2 group-hover:text-blue-600 transition-colors line-clamp-2">
+                                          {teacher.name}
+                                        </h3>
+                                        <p className="text-blue-600 font-semibold text-sm mb-2 line-clamp-1">{teacher.position}</p>
+                                        <div className="flex items-center justify-center gap-1 text-gray-500 text-sm">
+                                          <Star className="h-3 w-3 text-yellow-500" />
+                                          <span>{teacher.yearsOfService} years</span>
+                                        </div>
+                                      </CardContent>
+                                    </Card>
+                                  </Link>
+                                </motion.div>
+                              ))}
+                            </div>
+                          )}
+                        </motion.div>
+                      )
+                    })
                   ) : (
                     selectedDepartment === "All" && (
                       <motion.div
@@ -598,7 +720,9 @@ export default function FacultyPage() {
                         </span>
                       </div>
                       <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
-                        {selectedDepartment === "All" ? "All Team Members" : `${selectedDepartment} Members`}
+                        {selectedDepartment === "All" ? "All Team Members" : 
+                         selectedDepartment === "Master Teacher" ? "Master Teachers (15+ Years)" : 
+                         `${selectedDepartment} Faculty`}
                       </h2>
                       <p className="text-gray-600 mb-8">{allTeachersAndSisters.length} dedicated professionals for {schoolYears.find(year => year._id === selectedSchoolYear)?.yearLabel || 'current year'}</p>
                       <div className="w-24 h-1 bg-gradient-to-r from-green-600 to-emerald-600 rounded-full mx-auto mb-8"></div>
@@ -631,14 +755,17 @@ export default function FacultyPage() {
                           />
                         </div>
 
-                        <Select value={sortBy} onValueChange={(value: "name" | "department" | "hierarchy") => setSortBy(value)}>
+                        <Select value={selectedDepartment} onValueChange={setSelectedDepartment} disabled={loadingDepartments}>
                           <SelectTrigger className="w-full lg:w-48 h-12 border-2 border-gray-200 focus:border-blue-500 rounded-xl shadow-sm">
-                            <SelectValue />
+                            <SelectValue placeholder={loadingDepartments ? "Loading..." : "Filter by Department"} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="hierarchy">Sort by Hierarchy</SelectItem>
-                            <SelectItem value="name">Sort by Name</SelectItem>
-                            <SelectItem value="department">Sort by Department</SelectItem>
+                            <SelectItem value="All">All Departments</SelectItem>
+                            {availableDepartments.map((dept) => (
+                              <SelectItem key={dept} value={dept}>
+                                {dept}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -668,9 +795,11 @@ export default function FacultyPage() {
                                       <Badge className={`${
                                         faculty.isARSister 
                                           ? "bg-gradient-to-r from-purple-500 to-indigo-500" 
+                                          : selectedDepartment === "Master Teacher" && Number(faculty.yearsOfService) >= 15
+                                          ? "bg-gradient-to-r from-yellow-500 to-orange-500"
                                           : "bg-gradient-to-r from-green-500 to-emerald-500"
                                       } text-white border-0 px-3 py-1 text-xs font-bold shadow-lg`}>
-                                        {faculty.position}
+                                        {selectedDepartment === "Master Teacher" && Number(faculty.yearsOfService) >= 15 ? "Master Teacher" : faculty.position}
                                       </Badge>
                                     </div>
                                   </div>

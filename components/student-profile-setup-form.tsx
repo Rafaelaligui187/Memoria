@@ -37,27 +37,6 @@ interface StudentProfileSetupFormProps {
   onSave: () => void
 }
 
-const departmentData = {
-  "Elementary": {
-    yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
-    sections: ["Section A", "Section B", "Section C", "Section D"],
-  },
-  "Junior High": {
-    yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
-    sections: ["Section A", "Section B", "Section C", "Section D"],
-  },
-  "Senior High": {
-    yearLevels: ["Grade 11", "Grade 12"],
-    programs: ["STEM", "ABM", "HUMSS", "GAS", "TVL"],
-    sections: ["Section A", "Section B", "Section C", "Section D"],
-  },
-  "College": {
-    yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-    programs: ["BSIT", "BSCS", "BSIS", "BSA", "BSBA"],
-    sections: ["Section A", "Section B", "Section C", "Section D"],
-  },
-}
-
 export function StudentProfileSetupForm({
   schoolYearId,
   userId,
@@ -71,6 +50,8 @@ export function StudentProfileSetupForm({
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null)
   const [departmentData, setDepartmentData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [isLoadingFormData, setIsLoadingFormData] = useState(true)
+  const [formDataError, setFormDataError] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     // Basic Info
@@ -87,6 +68,7 @@ export function StudentProfileSetupForm({
     department: "",
     yearLevel: "",
     courseProgram: "",
+    major: "",
     blockSection: "",
 
     // Parents/Guardian Info
@@ -128,6 +110,9 @@ export function StudentProfileSetupForm({
   // Fetch dynamic form data
   useEffect(() => {
     const fetchFormData = async () => {
+      setIsLoadingFormData(true)
+      setFormDataError(null)
+      
       try {
         setLoading(true)
         const response = await fetch(`/api/admin/form-data?schoolYearId=${schoolYearId}`)
@@ -138,57 +123,16 @@ export function StudentProfileSetupForm({
           console.log('Dynamic form data loaded:', result.data.departments)
         } else {
           console.error('Failed to fetch form data:', result.error)
-          // Fallback to hardcoded data
-          setDepartmentData({
-            "Elementary": {
-              yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
-              programs: ["Elementary"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-            "Junior High": {
-              yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
-              programs: ["Junior High"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-            "Senior High": {
-              yearLevels: ["Grade 11", "Grade 12"],
-              programs: ["STEM", "ABM", "HUMSS", "GAS", "TVL"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-            "College": {
-              yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-              programs: ["BSIT", "BSCS", "BSIS", "BSA", "BSBA"],
-              sections: ["Section A", "Section B", "Section C", "Section D"],
-            },
-          })
+          setFormDataError(`Failed to load academic data: ${result.error}`)
+          setDepartmentData({})
         }
       } catch (error) {
         console.error('Error fetching form data:', error)
-        // Fallback to hardcoded data
-        setDepartmentData({
-          "Elementary": {
-            yearLevels: ["Grade 1", "Grade 2", "Grade 3", "Grade 4", "Grade 5", "Grade 6"],
-            programs: ["Elementary"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-          "Junior High": {
-            yearLevels: ["Grade 7", "Grade 8", "Grade 9", "Grade 10"],
-            programs: ["Junior High"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-          "Senior High": {
-            yearLevels: ["Grade 11", "Grade 12"],
-            programs: ["STEM", "ABM", "HUMSS", "GAS", "TVL"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-          "College": {
-            yearLevels: ["1st Year", "2nd Year", "3rd Year", "4th Year"],
-            programs: ["BSIT", "BSCS", "BSIS", "BSA", "BSBA"],
-            sections: ["Section A", "Section B", "Section C", "Section D"],
-          },
-        })
+        setFormDataError('Failed to connect to database. Please check your connection and try again.')
+        setDepartmentData({})
       } finally {
         setLoading(false)
+        setIsLoadingFormData(false)
       }
     }
 
@@ -279,23 +223,27 @@ export function StudentProfileSetupForm({
     if (!file) return
 
     const validation = validateImageFile(file)
-    if (!validation.isValid) {
+    if (validation) {
       toast({
         title: "Invalid Image",
-        description: validation.error,
+        description: validation,
         variant: "destructive",
       })
       return
     }
 
     try {
-      const imageUrl = await uploadProfileImage(file)
-      setProfilePhoto(imageUrl)
-      handleInputChange("profilePicture", imageUrl)
-      toast({
-        title: "Success",
-        description: "Profile picture uploaded successfully!",
-      })
+      const uploadResult = await uploadProfileImage(file)
+      if (uploadResult.success && uploadResult.url) {
+        setProfilePhoto(uploadResult.url)
+        handleInputChange("profilePicture", uploadResult.url)
+        toast({
+          title: "Success",
+          description: "Profile picture uploaded successfully!",
+        })
+      } else {
+        throw new Error(uploadResult.error || "Upload failed")
+      }
     } catch (error) {
       toast({
         title: "Upload Failed",
@@ -395,14 +343,44 @@ export function StudentProfileSetupForm({
 
   return (
     <div className="space-y-6">
-      {loading ? (
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading form data...</p>
+      {/* Loading State */}
+      {isLoadingFormData && (
+        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+          <div className="flex items-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-yellow-600"></div>
+            <div className="text-sm text-yellow-800">
+              <p className="font-medium">Loading academic data...</p>
+              <p>Please wait while we fetch the latest academic information from the database.</p>
+            </div>
           </div>
         </div>
-      ) : (
+      )}
+
+      {/* Error State */}
+      {formDataError && (
+        <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+          <div className="flex items-start gap-2">
+            <div className="w-2 h-2 bg-red-500 rounded-full mt-2"></div>
+            <div className="text-sm text-red-800">
+              <p className="font-medium mb-1">Unable to load academic data</p>
+              <p>{formDataError}</p>
+              <p className="mt-2 text-xs">Please refresh the page or contact support if the issue persists.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Form Content - Only show when data is loaded successfully */}
+      {!isLoadingFormData && !formDataError && (
+        <>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading form data...</p>
+              </div>
+            </div>
+          ) : (
         <>
           {/* Header */}
           <div className="flex items-center justify-between">
@@ -435,7 +413,7 @@ export function StudentProfileSetupForm({
             <div className="relative">
               <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-gray-200">
                 <Image
-                  src={profilePhoto || getImagePreviewUrl(formData.profilePicture) || "/placeholder-user.jpg"}
+                  src={profilePhoto || formData.profilePicture || "/placeholder-user.jpg"}
                   alt="Profile"
                   width={96}
                   height={96}
@@ -846,6 +824,8 @@ export function StudentProfileSetupForm({
           </div>
         </CardContent>
       </Card>
+        </>
+          )}
         </>
       )}
     </div>

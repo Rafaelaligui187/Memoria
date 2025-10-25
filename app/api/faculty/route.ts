@@ -29,14 +29,38 @@ export async function GET(request: NextRequest) {
 
     if (department && department !== "All") {
       if (department === "Faculty") {
-        query.userType = "faculty"
+        // For Faculty filter, look for teaching positions and exclude staff/utility
+        query.$and = [
+          { $or: [
+            { userType: "faculty" },
+            { position: { $regex: /teacher|instructor|professor|subject teacher|department head/i } },
+            { department: { $regex: /department|college|senior high|junior high|elementary/i } }
+          ]},
+          { $nor: [
+            { position: { $regex: /staff|librarian|utility|maintenance|electrician/i } },
+            { department: { $regex: /staff|utility/i } }
+          ]}
+        ]
       } else if (department === "Staff") {
-        query.userType = "staff"
+        query.$or = [
+          { userType: "staff" },
+          { position: { $regex: /staff|librarian|head/i } },
+          { department: "Staff" }
+        ]
       } else if (department === "Utility") {
-        query.userType = "utility"
+        query.$or = [
+          { userType: "utility" },
+          { position: { $regex: /utility|maintenance|electrician/i } },
+          { department: "Utility" }
+        ]
       } else if (department === "AR Sisters") {
         // For AR Sisters filter, we'll handle this separately
         query.userType = "nonexistent" // This will return no results from faculty collection
+      } else if (department === "Master Teacher") {
+        // For Master Teacher filter, add years of service condition
+        query.$expr = {
+          $gte: [{ $toInt: { $ifNull: ["$yearsOfService", 0] } }, 15]
+        }
       } else {
         query.department = department
       }

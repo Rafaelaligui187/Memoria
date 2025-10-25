@@ -38,7 +38,7 @@ interface Account {
   id: string
   name: string
   email: string
-  role: "Student" | "Faculty" | "Alumni" | "Staff" | "Utility"
+  role: "Student" | "Faculty" | "Alumni" | "Staff" | "Utility" | "Advisory"
   department: string
   status: "Active" | "Inactive" | "Pending"
   yearId: string
@@ -214,6 +214,7 @@ export function EnhancedAccountManagement({ selectedYear }: EnhancedAccountManag
                 <SelectItem value="Alumni">Alumni</SelectItem>
                 <SelectItem value="Staff">Staff</SelectItem>
                 <SelectItem value="Utility">Utility</SelectItem>
+                <SelectItem value="Advisory">Advisory</SelectItem>
               </SelectContent>
             </Select>
             <Select value={selectedStatus} onValueChange={setSelectedStatus}>

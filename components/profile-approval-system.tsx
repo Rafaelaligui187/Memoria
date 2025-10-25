@@ -28,7 +28,7 @@ interface ProfileSubmission {
   userId: string
   userName: string
   userEmail: string
-  role: "Student" | "Faculty" | "Alumni" | "Staff" | "Utility" | "AR Sisters"
+  role: "Student" | "Faculty" | "Alumni" | "Staff" | "Utility" | "AR Sisters" | "Advisory"
   department: string
   status: "pending" | "approved" | "rejected"
   submittedAt: string
@@ -137,7 +137,7 @@ export function ProfileApprovalSystem({ selectedYear, selectedYearLabel }: Profi
           userId: account.id,
           userName: account.name,
           userEmail: account.email,
-          role: account.role as "Student" | "Faculty" | "Alumni" | "Staff" | "Utility" | "AR Sisters",
+          role: account.role as "Student" | "Faculty" | "Alumni" | "Staff" | "Utility" | "AR Sisters" | "Advisory",
           department: account.department,
           status: account.profileStatus || "pending",
           submittedAt: account.createdAt,
@@ -255,6 +255,7 @@ export function ProfileApprovalSystem({ selectedYear, selectedYearLabel }: Profi
         : [selectedReason]
     
     const customRejectionReason = customReason || ""
+    const rejectionReason = reasons.join(", ")
 
     if (reasons.length === 0 || !reasons[0]) {
       toast({
@@ -459,6 +460,7 @@ export function ProfileApprovalSystem({ selectedYear, selectedYearLabel }: Profi
                 <SelectItem value="Staff">Staff</SelectItem>
                 <SelectItem value="Utility">Utility</SelectItem>
                 <SelectItem value="AR Sisters">AR Sisters</SelectItem>
+                <SelectItem value="Advisory">Advisory</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1187,7 +1189,7 @@ export function ProfileApprovalSystem({ selectedYear, selectedYearLabel }: Profi
           <DialogHeader>
             <DialogTitle>Create Manual Profile</DialogTitle>
             <DialogDescription>
-              Create a new profile manually for {selectedYear}
+              Create a new profile manually for {selectedYearLabel || selectedYear}
             </DialogDescription>
           </DialogHeader>
           <CreateManualProfileForm

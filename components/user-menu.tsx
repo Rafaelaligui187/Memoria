@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Settings, MessageSquare, Trash2, UserPlus, ChevronDown, LogOut } from "lucide-react"
+import { Settings, MessageSquare, UserPlus, ChevronDown, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -16,17 +16,6 @@ import { ProfileManagementDialog } from "./profile-management-dialog"
 import { CustomizeDialog } from "./customize-dialog"
 import { MessageAdminDialog } from "./message-admin-dialog"
 import { UserNotificationBell } from "./user-notification-bell"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
 import Image from "next/image"
 
 export function UserMenu() {
@@ -35,10 +24,6 @@ export function UserMenu() {
   const [showCustomize, setShowCustomize] = useState(false)
   const [showMessageAdmin, setShowMessageAdmin] = useState(false)
 
-  const handleDeleteProfile = () => {
-    console.log("[v0] Delete profile requested for user:", user?.name)
-    // TODO: Implement actual delete functionality
-  }
 
   if (!user) return null
 
@@ -109,36 +94,6 @@ export function UserMenu() {
             <UserPlus className="mr-3 h-4 w-4 text-accent" />
             <span className="font-medium">Set Up Profile</span>
           </DropdownMenuItem>
-
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <DropdownMenuItem
-                onSelect={(e) => e.preventDefault()}
-                className="px-2 py-2.5 cursor-pointer text-destructive focus:text-destructive"
-              >
-                <Trash2 className="mr-3 h-4 w-4" />
-                <span className="font-medium">Delete Profile</span>
-              </DropdownMenuItem>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This action cannot be undone. This will permanently delete your yearbook profile and remove all your
-                  data from our servers.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDeleteProfile}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  Delete Profile
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
 
           <DropdownMenuSeparator className="my-2" />
 

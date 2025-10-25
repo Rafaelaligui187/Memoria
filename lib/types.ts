@@ -115,9 +115,9 @@ export interface AdvisoryProfile extends BaseProfile {
   
   // Academic Information
   academicDepartment: string
-  academicYearLevels: string[]
+  academicYearLevel: string
   academicCourseProgram: string
-  academicSections: string[]
+  academicSection: string
   
   // Social Media
   socialMediaFacebook?: string

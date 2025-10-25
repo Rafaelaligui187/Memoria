@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { useToast } from "@/hooks/use-toast"
-import { MessageSquare, AlertTriangle, CheckCircle, Clock, Eye, Reply, Archive, Filter, RefreshCw, Paperclip, Download, FileText, Image } from "lucide-react"
+import { MessageSquare, AlertTriangle, CheckCircle, Clock, Eye, Reply, Archive, Filter, RefreshCw, Paperclip, Download, FileText, Image, Trash2 } from "lucide-react"
 
 interface Report {
   _id?: string
@@ -249,6 +249,56 @@ export function ReportsManagement({ selectedYear, selectedYearLabel }: ReportsMa
       toast({
         title: "Error",
         description: "Failed to send reply",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteReport = async () => {
+    if (!selectedReport) return
+
+    try {
+      const reportId = selectedReport._id || selectedReport.id
+      const response = await fetch(`/api/reports/${reportId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+
+      const data = await response.json()
+      
+      if (data.success) {
+        // Remove from local state
+        const updatedReports = reports.filter((report) => 
+          (report._id || report.id) !== reportId
+        )
+        setReports(updatedReports)
+        setViewDialogOpen(false)
+        setSelectedReport(null)
+
+        toast({
+          title: "Report Deleted",
+          description: "The report has been successfully deleted.",
+        })
+        
+        // Trigger refresh for user message history
+        window.dispatchEvent(new CustomEvent('refreshUserMessages'))
+        
+        // Dispatch event to update user notifications
+        window.dispatchEvent(new CustomEvent('messageStatusChanged'))
+      } else {
+        toast({
+          title: "Error",
+          description: data.error || "Failed to delete report",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error('Error deleting report:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete report",
         variant: "destructive",
       })
     }
@@ -725,6 +775,16 @@ export function ReportsManagement({ selectedYear, selectedYearLabel }: ReportsMa
             <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
               Close
             </Button>
+            {selectedReport?.status === "resolved" && (
+              <Button
+                variant="destructive"
+                onClick={handleDeleteReport}
+                className="flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Report
+              </Button>
+            )}
             {selectedReport?.status !== "resolved" && (
               <>
                 <Button

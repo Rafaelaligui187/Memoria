@@ -5,11 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Upload, Palette, Bell, User, Trash2, Save, X } from "lucide-react"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { Upload, User, Trash2, Save, X } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 import Image from "next/image"
@@ -22,8 +21,6 @@ interface CustomizeDialogProps {
 
 export function CustomizeDialog({ open, onOpenChange }: CustomizeDialogProps) {
   const { user, updateUser } = useAuth()
-  const [theme, setTheme] = useState("system")
-  const [emailNotifications, setEmailNotifications] = useState(true)
   const [passwords, setPasswords] = useState({
     current: "",
     new: "",
@@ -34,7 +31,8 @@ export function CustomizeDialog({ open, onOpenChange }: CustomizeDialogProps) {
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null)
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false)
   const [isRemovingPhoto, setIsRemovingPhoto] = useState(false)
-  const [shouldRemovePhoto, setShouldRemovePhoto] = useState(false)
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
+  const [deletePassword, setDeletePassword] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const getUserId = () => {
@@ -151,7 +149,6 @@ export function CustomizeDialog({ open, onOpenChange }: CustomizeDialogProps) {
           
           // Clear local state
           setProfilePhoto(null)
-          setShouldRemovePhoto(false)
           
           // Clear file input
           if (fileInputRef.current) {
@@ -282,10 +279,81 @@ export function CustomizeDialog({ open, onOpenChange }: CustomizeDialogProps) {
     }
   }
 
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) {
+      toast({
+        title: "Password required",
+        description: "Please enter your current password to confirm account deletion.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const userId = getUserId()
+    if (!userId) {
+      toast({
+        title: "Authentication error",
+        description: "Unable to identify user. Please log in again.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsDeletingAccount(true)
+    try {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'delete-account',
+          userId: userId,
+          password: deletePassword,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        toast({
+          title: "Account deleted successfully!",
+          description: `Your account and all associated data have been permanently deleted.`,
+        })
+        
+        // Clear the password field
+        setDeletePassword("")
+        
+        // Close the dialog
+        onOpenChange(false)
+        
+        // Redirect to login page after a short delay
+        setTimeout(() => {
+          window.location.href = '/login'
+        }, 2000)
+      } else {
+        toast({
+          title: "Account deletion failed",
+          description: data.message || "Failed to delete account. Please try again.",
+          variant: "destructive",
+        })
+        setDeletePassword("")
+      }
+    } catch (error) {
+      console.error('Error deleting account:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete account. Please try again.",
+        variant: "destructive",
+      })
+      setDeletePassword("")
+    } finally {
+      setIsDeletingAccount(false)
+    }
+  }
+
   const handleSave = async () => {
     console.log("[v0] Saving customization settings:", {
-      theme,
-      emailNotifications,
       newEmail,
     })
 
@@ -307,8 +375,6 @@ export function CustomizeDialog({ open, onOpenChange }: CustomizeDialogProps) {
           body: JSON.stringify({
             action: 'update-user-settings',
             userId: userId,
-            theme: theme,
-            emailNotifications: emailNotifications,
             email: newEmail || undefined,
           }),
         })
@@ -487,56 +553,6 @@ export function CustomizeDialog({ open, onOpenChange }: CustomizeDialogProps) {
             </CardContent>
           </Card>
 
-          <Card className="border-accent/20">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Palette className="h-5 w-5 text-accent" />
-                Theme Preferences
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="theme">Theme</Label>
-                <Select value={theme} onValueChange={setTheme}>
-                  <SelectTrigger className="h-11">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="light">☀️ Light</SelectItem>
-                    <SelectItem value="dark">🌙 Dark</SelectItem>
-                    <SelectItem value="system">💻 System</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="p-3 bg-muted rounded-lg">
-                <p className="text-sm text-muted-foreground">
-                  Theme changes will be applied immediately across your yearbook experience.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-accent/20">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Bell className="h-5 w-5 text-accent" />
-                Notification Settings
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                <div className="space-y-0.5">
-                  <Label htmlFor="emailNotifications" className="font-medium">
-                    Email Notifications
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Receive updates about yearbook activities and messages
-                  </p>
-                </div>
-                <Switch id="emailNotifications" checked={emailNotifications} onCheckedChange={setEmailNotifications} />
-              </div>
-            </CardContent>
-          </Card>
 
           <Card className="border-destructive/30 bg-destructive/5">
             <CardHeader className="pb-3">
@@ -551,10 +567,55 @@ export function CustomizeDialog({ open, onOpenChange }: CustomizeDialogProps) {
                 <p className="text-sm text-muted-foreground mt-1 mb-3">
                   Permanently delete your account and all associated data. This action cannot be undone.
                 </p>
-                <Button variant="destructive" size="sm">
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Delete Account
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm" disabled={isDeletingAccount}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      {isDeletingAccount ? "Deleting Account..." : "Delete Account"}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent className="max-w-md">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle className="text-destructive">Delete Account</AlertDialogTitle>
+                      <AlertDialogDescription className="text-sm">
+                        This action will permanently delete your account and all associated data including:
+                        <ul className="list-disc list-inside mt-2 space-y-1">
+                          <li>All profiles you created</li>
+                          <li>Your account information</li>
+                          <li>All notifications</li>
+                          <li>Audit logs</li>
+                        </ul>
+                        <strong className="text-destructive">This action cannot be undone.</strong>
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <div className="py-4">
+                      <Label htmlFor="deletePassword" className="text-sm font-medium">
+                        Enter your current password to confirm:
+                      </Label>
+                      <Input
+                        id="deletePassword"
+                        type="password"
+                        placeholder="Enter your password"
+                        value={deletePassword}
+                        onChange={(e) => setDeletePassword(e.target.value)}
+                        className="mt-2"
+                        disabled={isDeletingAccount}
+                      />
+                    </div>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={isDeletingAccount}>
+                        Cancel
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleDeleteAccount}
+                        className="bg-destructive hover:bg-destructive/90"
+                        disabled={isDeletingAccount || !deletePassword}
+                      >
+                        {isDeletingAccount ? "Deleting..." : "Delete Account"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </CardContent>
           </Card>

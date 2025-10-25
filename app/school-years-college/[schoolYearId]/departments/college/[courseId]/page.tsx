@@ -288,11 +288,22 @@ export default function CoursePage({
           </div>
 
           <div className="space-y-8">
-            {['1st Year', '2nd Year', '3rd Year', '4th Year'].map((yearLevel) => {
+            {(() => {
+              // Get year levels dynamically from the data
               const filteredYearLevels = selectedMajor 
                 ? yearLevels.filter(year => year.majorName === selectedMajor)
                 : yearLevels
-              const yearData = filteredYearLevels.find(year => year.level === yearLevel)
+              
+              // Get unique year levels from the filtered data
+              const uniqueYearLevels = [...new Set(filteredYearLevels.map(year => year.level))]
+                .sort((a, b) => {
+                  // Sort year levels in order
+                  const order = ['1st Year', '2nd Year', '3rd Year', '4th Year']
+                  return order.indexOf(a) - order.indexOf(b)
+                })
+              
+              return uniqueYearLevels.map((yearLevel) => {
+                const yearData = filteredYearLevels.find(year => year.level === yearLevel)
               return (
                 <div key={yearLevel} className="bg-white rounded-xl shadow-sm border border-purple-100 p-8">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between">
@@ -333,7 +344,8 @@ export default function CoursePage({
                   </div>
                 </div>
               )
-            })}
+            })
+            })()}
           </div>
         </div>
       </div>
