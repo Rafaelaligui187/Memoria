@@ -1,0 +1,74 @@
+🧩 Correct Render Setup for Next.js (with Middleware)
+✅ 1️⃣ Build Command
+In your Render dashboard → your service → Settings tab → scroll down to “Build Command”.
+Make sure it’s exactly:
+npm install && npm run build
+
+✅ NOT npm run dev
+Render cannot use dev mode — it must build production assets (.next/server etc.) first.
+
+✅ 2️⃣ Start Command
+Also in the Render “Settings” tab → “Start Command” should be:
+npm start
+
+This makes Render run the production server that next build generated.
+
+✅ 3️⃣ Make sure your package.json scripts look like this:
+Open your package.json and check:
+{
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  }
+}
+
+If you only have "dev", add "build" and "start" as shown above.
+
+✅ 4️⃣ Check Middleware again (final version)
+Make sure your middleware.ts has:
+export const config = {
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
+  runtime: "nodejs", // 👈 this line must be here
+}
+
+
+✅ 5️⃣ Redeploy Cleanly
+Then do this on your local terminal:
+rm -rf .next
+npm run build
+git add .
+git commit -m "Fix Render EvalError with Node runtime"
+git push origin main
+
+Render will auto-redeploy your project after you push.
+Wait until it finishes, then test your Render URL again.
+
+🔍 Why npm run dev fails on Render
+
+
+npm run dev starts a development server, not a production build.
+
+
+The Edge sandbox (eval disallowed) only applies to production builds — so locally it works fine, but fails on Render.
+
+
+That’s why the correct fix is to build (npm run build) and run (npm start) with the Node runtime.
+
+
+
+If you want, paste your Render:
+
+
+Build Command
+
+
+Start Command
+
+
+package.json scripts section
+
+
+and I’ll confirm everything is aligned for your environment.
